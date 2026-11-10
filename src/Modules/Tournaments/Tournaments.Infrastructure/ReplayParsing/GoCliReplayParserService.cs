@@ -97,11 +97,11 @@ public class GoCliReplayParserService : IDotaReplayParserService
         if (replayStream == null)
             throw new DomainException("Stream de replay não pode ser nulo.");
 
-        if (!File.Exists(_executablePath))
-            throw new DomainException($"Executável do parser de replay não encontrado em: {_executablePath}");
-
         // 1. Validação física do arquivo (Segurança em Profundidade)
         ValidateReplayStream(replayStream, originalFileName);
+
+        if (!File.Exists(_executablePath))
+            throw new DomainException($"Executável do parser de replay não encontrado em: {_executablePath}");
 
         var runId = Guid.NewGuid().ToString("N");
         var isolatedRunDir = Path.Combine(_toolsDir, "runs", runId);
