@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Host/">
+    <Project Path="src/Host/TournamentCreator.WebApi/TournamentCreator.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Identity/">
+    <Project Path="src/Modules/Identity/Identity.Application/Identity.Application.csproj" />
+    <Project Path="src/Modules/Identity/Identity.Contracts/Identity.Contracts.csproj" />
+    <Project Path="src/Modules/Identity/Identity.Domain/Identity.Domain.csproj" />
+    <Project Path="src/Modules/Identity/Identity.Infrastructure/Identity.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Tournaments/">
+    <Project Path="src/Modules/Tournaments/Tournaments.Application/Tournaments.Application.csproj" />
+    <Project Path="src/Modules/Tournaments/Tournaments.Contracts/Tournaments.Contracts.csproj" />
+    <Project Path="src/Modules/Tournaments/Tournaments.Domain/Tournaments.Domain.csproj" />
+    <Project Path="src/Modules/Tournaments/Tournaments.Infrastructure/Tournaments.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/BuildingBlocks.Domain/BuildingBlocks.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tournaments.UnitTests/Tournaments.UnitTests.csproj" />
+  </Folder>
+</Solution>

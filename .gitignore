@@ -1,0 +1,47 @@
+# .NET / C# Build Artifacts
+bin/
+obj/
+out/
+packages/
+.dotnet/
+.dotnet_cli/
+.dotnet_temp/
+scratch/
+convertido/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.idea/
+.vscode/
+
+# Diretrizes internas do assistente (não sobem para o Git)
+AGENTS.md
+.agents/
+
+# Segredos, Variáveis de Ambiente e Configurações Locais (NUNCA subir para o GitHub)
+.env
+.env.*
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.local.json
+secrets.json
+
+# Arquivos de Replay (.dem), Uploads Locais e Binários Compilados
+*.dem
+*.dem.bz2
+tools/ParseGoDota/parsegodota.exe
+tools/ParseGoDota/parsegodota
+tools/ParseGoDota/runs/
+tools/ParseGoDota/replays/*.dem
+src/Host/TournamentCreator.WebApi/wwwroot/uploads/*
+!src/Host/TournamentCreator.WebApi/wwwroot/uploads/.gitkeep
+
+# Logs e Arquivos Temporários de Diagnóstico
+*.log
+logs/
+test_output*.txt
+build_errors*.txt
+TestResults/
+coverage/

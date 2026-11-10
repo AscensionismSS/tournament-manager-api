@@ -1,0 +1,264 @@
+@HostAddress = http://localhost:5208
+
+### 0.1 Login como SuperAdmin (Gera Token JWT)
+# @name login
+POST {{HostAddress}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@tournament.local",
+  "password": "Admin123!"
+}
+
+### 0.2 Obter Perfil do Usuário Logado
+GET {{HostAddress}}/api/v1/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### 0.2.1 Criar Convite de Cadastro para Email
+POST {{HostAddress}}/api/v1/invitations
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "email": "jogador1@dota.local",
+  "targetRole": 0
+}
+
+### 0.2.2 Listar Todos os Convites Enviados (Para ver emails, códigos gerados e status)
+GET {{HostAddress}}/api/v1/invitations
+Authorization: Bearer {{login.response.body.token}}
+Accept: application/json
+
+### 0.2.3 Desativar/Revogar Convite (Cancela o link antes de ser usado)
+DELETE {{HostAddress}}/api/v1/invitations/{{$guid}}
+Authorization: Bearer {{login.response.body.token}}
+
+### 0.3 Atualizar Funções (Roles) do Jogador e Função Favorita
+PUT {{HostAddress}}/api/v1/auth/roles
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "roles": ["Carry", "Mid", "Offlane", "SoftSupport", "HardSupport"],
+  "preferredRole": "Mid"
+}
+
+### 0.4 Vincular Conta Steam (OpenDota Profile)
+POST {{HostAddress}}/api/v1/auth/link-steam
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "steamId": 76561198000000001
+}
+
+### 0.5 Solicitar Recuperação de Senha (Esqueci a Senha - Anti-Enumeração)
+POST {{HostAddress}}/api/v1/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "admin@tournament.local"
+}
+
+### 0.6 Redefinir Senha (com Token e Confirmação de Senha)
+POST {{HostAddress}}/api/v1/auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "TOKEN_RECEBIDO_AQUI",
+  "newPassword": "NovaSenhaForte123!",
+  "confirmPassword": "NovaSenhaForte123!"
+}
+
+### 0.7 Solicitar Recuperação de Login (Esqueci o Login/Username)
+POST {{HostAddress}}/api/v1/auth/forgot-login
+Content-Type: application/json
+
+{
+  "email": "admin@tournament.local"
+}
+
+### 0.8 Consultar Login Recuperado
+GET {{HostAddress}}/api/v1/auth/recover-login?token=TOKEN_RECEBIDO_AQUI
+Accept: application/json
+
+### 0.9 Caixa do Admin: Listar Solicitações de Recuperação Geradas
+GET {{HostAddress}}/api/v1/auth/recovery-requests
+Authorization: Bearer {{login.response.body.token}}
+Accept: application/json
+
+
+### 0.99 Listar Todos os Torneios (com filtro opcional de status)
+GET {{HostAddress}}/api/v1/tournaments
+Accept: application/json
+
+### 1. Obter opções de configuração gerais (sem filtro de time)
+GET {{HostAddress}}/api/v1/tournaments/options
+Accept: application/json
+
+### 2. Obter formatos válidos para 5 equipes (deve retornar apenas Fase de Grupos)
+GET {{HostAddress}}/api/v1/tournaments/options?teamCount=5
+Accept: application/json
+
+### 3. Obter formatos válidos para 8 equipes (retorna Mata-Mata e Grupos com opção de 2 grupos)
+GET {{HostAddress}}/api/v1/tournaments/options?teamCount=8
+Accept: application/json
+
+### 4. Criar Torneio
+POST {{HostAddress}}/api/v1/tournaments
+Content-Type: application/json
+
+{
+  "name": "Copa Internacional Dota 2",
+  "type": "DirectPlayoffs",
+  "playoffFormat": "SingleElimination",
+  "teamCount": 4,
+  "groupCount": 1,
+  "playoffSeriesFormat": "Bo3",
+  "grandFinalSeriesFormat": "Bo5",
+  "enableDraftMode": true
+}
+
+### 4.1 Encerrar Inscrições do Torneio (Libera início do Draft)
+POST {{HostAddress}}/api/v1/tournaments/{{$guid}}/registrations/close
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+### 4.2 Convidar/Inserir Jogador Atrasado de Fora Durante o Draft
+POST {{HostAddress}}/api/v1/draft/{{$guid}}/late-players
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "name": "Miracle-",
+  "externalUserId": "steam-76561198000000099",
+  "roles": ["Carry", "Mid"],
+  "preferredRole": "Mid",
+  "rankTier": 80,
+  "avatarUrl": "https://avatars.steamstatic.com/sample.jpg"
+}
+
+### 5. Renomear Equipe após Conclusão do Draft (Apenas Admin)
+POST {{HostAddress}}/api/v1/draft/{{$guid}}/teams/{{$guid}}/rename
+Content-Type: application/json
+
+{
+  "newName": "Team Liquid",
+  "expectedVersion": 25
+}
+
+### 6. Consultar Tabela de Classificação do Torneio (Standings com Desempates e Versão)
+GET {{HostAddress}}/api/v1/tournaments/{{$guid}}/standings
+Accept: application/json
+
+### 7. Iniciar Torneio (Gera partidas de Grupos ou Chaveamento de Playoffs)
+POST {{HostAddress}}/api/v1/tournaments/{{$guid}}/start
+Content-Type: application/json
+
+### 8. Avançar para os Playoffs (Calcula seeds dos Grupos e monta chaveamento)
+POST {{HostAddress}}/api/v1/tournaments/{{$guid}}/playoffs/generate
+Content-Type: application/json
+
+### 9. Reverter para Fase de Grupos (Trava de segurança: só se 0 jogos nos playoffs)
+POST {{HostAddress}}/api/v1/tournaments/{{$guid}}/playoffs/revert
+Content-Type: application/json
+
+### 10. Lançar W.O. (Walkover) da Série Inteira (Admin)
+POST {{HostAddress}}/api/v1/matches/{{$guid}}/result/walkover
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "winnerTeamId": "00000000-0000-0000-0000-000000000001"
+}
+
+### 11. Ingestão de Replay (.dem Parser)
+POST {{HostAddress}}/api/v1/matches/result/replay-ingest
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "matchSeriesId": "00000000-0000-0000-0000-000000000002",
+  "gameNumber": 1,
+  "winnerTeamId": "00000000-0000-0000-0000-000000000001",
+  "durationSeconds": 2650,
+  "teamAKills": 42,
+  "teamBKills": 18,
+  "dotaMatchId": 7891234567,
+  "playerStats": [
+    {
+      "playerId": "00000000-0000-0000-0000-000000000010",
+      "teamId": "00000000-0000-0000-0000-000000000001",
+      "heroId": 1,
+      "kills": 15,
+      "deaths": 2,
+      "assists": 18,
+      "netWorth": 28000,
+      "goldPerMinute": 780,
+      "experiencePerMinute": 850,
+      "itemIds": [1, 2, 3, 4, 5, 6]
+    }
+  ]
+}
+
+### 12. Desfazer Apenas o Último Mapa da Série (Preserva jogos anteriores)
+POST {{HostAddress}}/api/v1/matches/{{$guid}}/games/remove-last
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+### 13. Aplicar W.O. em Mapa Específico (Jogo #1)
+PUT {{HostAddress}}/api/v1/matches/{{$guid}}/games/1/walkover
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "winnerTeamId": "00000000-0000-0000-0000-000000000001"
+}
+
+### 14. Reverter a Série Inteira (Zera para 0x0)
+POST {{HostAddress}}/api/v1/matches/{{$guid}}/rollback
+Content-Type: application/json
+
+### 15. Upload de Replay (.dem) processado via ParseGoDota CLI
+POST {{HostAddress}}/api/v1/matches/{{$guid}}/upload-replay
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="replayFile"; filename="8817940931.dem"
+Content-Type: application/octet-stream
+
+< ./tools/ParseGoDota/replays/sample.dem
+--WebAppBoundary--
+
+### 16. Inserir Resultado Manual da Série (Próximo Mapa)
+POST {{HostAddress}}/api/v1/matches/{{$guid}}/result/manual
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "winnerTeamId": "00000000-0000-0000-0000-000000000001",
+  "durationSeconds": 2100,
+  "teamAKills": 35,
+  "teamBKills": 22,
+  "firstPickTeamId": "00000000-0000-0000-0000-000000000001",
+  "teamABanHeroIds": [1, 2, 3],
+  "teamBBanHeroIds": [4, 5, 6],
+  "dotaMatchId": 8817940931
+}
+
+### 17. Atualizar/Editar Resultado Manual de Mapa Específico (Jogo #1)
+PUT {{HostAddress}}/api/v1/matches/{{$guid}}/games/1
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "winnerTeamId": "00000000-0000-0000-0000-000000000002",
+  "durationSeconds": 2300,
+  "teamAKills": 20,
+  "teamBKills": 40,
+  "firstPickTeamId": "00000000-0000-0000-0000-000000000002",
+  "teamABanHeroIds": [1, 2, 3],
+  "teamBBanHeroIds": [4, 5, 6],
+  "dotaMatchId": 8817940931
+}
+

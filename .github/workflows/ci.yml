@@ -1,0 +1,44 @@
+name: CI - Build & Tests
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: TournamentEngineDb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout Código
+      uses: actions/checkout@v4
+
+    - name: Configurar .NET 10
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restaurar Dependências
+      run: dotnet restore TournamentCreator.slnx
+
+    - name: Compilar Solução
+      run: dotnet build TournamentCreator.slnx --no-restore --configuration Release
+
+    - name: Executar Testes Automatizados
+      run: dotnet test tests/Tournaments.UnitTests/Tournaments.UnitTests.csproj --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"

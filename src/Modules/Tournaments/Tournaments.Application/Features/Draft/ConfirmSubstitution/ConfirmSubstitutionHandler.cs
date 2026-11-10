@@ -1,0 +1,41 @@
+using BuildingBlocks.Domain;
+using MediatR;
+using Tournaments.Application.Common.Interfaces;
+using Tournaments.Contracts.Draft;
+using Tournaments.Domain.Repositories;
+
+namespace Tournaments.Application.Features.Draft.ConfirmSubstitution;
+
+public class ConfirmSubstitutionHandler : IRequestHandler<ConfirmSubstitutionCommand, DraftStateSnapshotDto>
+{
+    private readonly IDraftSessionRepository _draftRepository;
+    private readonly ITournamentRealtimeNotifier _notifier;
+    private readonly ISystemSecuritySettingsRepository _securitySettingsRepository;
+
+    public ConfirmSubstitutionHandler(
+        IDraftSessionRepository draftRepository,
+        ITournamentRealtimeNotifier notifier,
+        ISystemSecuritySettingsRepository? securitySettingsRepository = null)
+    {
+        _draftRepository = draftRepository;
+        _notifier = notifier;
+        _securitySettingsRepository = securitySettingsRepository ?? new DefaultSystemSecuritySettingsRepository();
+    }
+
+    public async Task<DraftStateSnapshotDto> Handle(ConfirmSubstitutionCommand request, CancellationToken cancellationToken)
+    {
+        var securitySettings = await _securitySettingsRepository.GetAsync(cancellationToken);
+        securitySettings.EnsureDraftPicksAllowed();
+
+        var session = await _draftRepository.GetByIdAsync(request.DraftSessionId, cancellationToken)
+            ?? throw new DomainException($"Sessão de Draft '{request.DraftSessionId}' não encontrada.");
+
+        session.ConfirmSubstitution(request.NewPlayerId, request.ExpectedVersion);
+        await _draftRepository.UpdateAsync(session, cancellationToken);
+
+        var snapshot = DraftSnapshotMapper.ToSnapshotDto(session);
+        await _notifier.NotifyDraftStateSnapshotAsync(session.TournamentId, snapshot, cancellationToken);
+
+        return snapshot;
+    }
+}

@@ -1,0 +1,678 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+		"name": "TournamentCreator API (Dota 2 Engine)",
+		"description": "Coleção profissional completa para teste dos endpoints do TournamentCreator.\n\nInstruções:\n1. Execute a requisição 'POST 1.1 Login (Admin)' na pasta '1. Autenticação & Perfil'.\n2. O script pós-execução irá salvar automaticamente o token JWT na variável {{token}}.\n3. Todas as demais requisições que exigem autenticação já herdam {{token}} automaticamente!",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5208",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "tournamentId",
+			"value": "00000000-0000-0000-0000-000000000000",
+			"type": "string"
+		},
+		{
+			"key": "draftSessionId",
+			"value": "00000000-0000-0000-0000-000000000000",
+			"type": "string"
+		},
+		{
+			"key": "invitationId",
+			"value": "00000000-0000-0000-0000-000000000000",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Autenticação & Perfil",
+			"item": [
+				{
+					"name": "1.1 Login (SuperAdmin - Auto-salva Token)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    pm.collectionVariables.set('token', data.token);",
+									"    pm.environment.set('token', data.token);",
+									"    console.log('✅ Token JWT capturado com sucesso!');",
+									"    pm.test('Status code é 200 OK', function () {",
+									"        pm.response.to.have.status(200);",
+									"    });",
+									"    pm.test('Token JWT retornado', function () {",
+									"        pm.expect(data.token).to.be.a('string');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@tournament.local\",\n  \"password\": \"Admin123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						},
+						"description": "Autentica o SuperAdmin e extrai automaticamente o token JWT para reuso em todas as requisições."
+					}
+				},
+				{
+					"name": "1.2 Obter Perfil Atual (Me)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "1.3 Atualizar Roles do Jogador & PreferredRole",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"roles\": [\"Carry\", \"Mid\", \"Offlane\", \"SoftSupport\", \"HardSupport\"],\n  \"preferredRole\": \"Mid\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/roles",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "roles"]
+						},
+						"description": "Se todas as 5 funções forem marcadas, 'Flex' é atribuído automaticamente pelo backend."
+					}
+				},
+				{
+					"name": "1.4 Vincular Conta Steam (OpenDota)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"steamId\": 76561198000000001\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/link-steam",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "link-steam"]
+						}
+					}
+				},
+				{
+					"name": "1.5 Registrar com Código de Convite",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"invitationCode\": \"COLOQUE_O_TOKEN_AQUI\",\n  \"nickname\": \"Miracle-\",\n  \"password\": \"SenhaForte123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register-with-invite",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "register-with-invite"]
+						}
+					}
+				},
+				{
+					"name": "1.6 Esqueci a Senha (Anti-Enumeração)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@tournament.local\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/forgot-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "forgot-password"]
+						},
+						"description": "OWASP: Sempre retorna mensagem de sucesso genérica para não vazar a existência do email."
+					}
+				},
+				{
+					"name": "1.7 Redefinir Senha (com Token e Confirmação)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"TOKEN_OBTIDO_NA_CAIXA_ADMIN\",\n  \"newPassword\": \"NovaSenhaForte123!\",\n  \"confirmPassword\": \"NovaSenhaForte123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/reset-password",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "reset-password"]
+						}
+					}
+				},
+				{
+					"name": "1.8 Esqueci o Login/Username (Anti-Enumeração)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@tournament.local\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/forgot-login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "forgot-login"]
+						}
+					}
+				},
+				{
+					"name": "1.9 Consultar Login Recuperado",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/recover-login?token=TOKEN_OBTIDO",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "recover-login"],
+							"query": [
+								{
+									"key": "token",
+									"value": "TOKEN_OBTIDO"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "1.10 Caixa do Admin: Solicitações de Recuperação",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/recovery-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "recovery-requests"]
+						},
+						"description": "Permite ao Admin visualizar na sua caixa todas as solicitações de recuperação de senha e login com seus links gerados."
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Convites por Email",
+			"item": [
+				{
+					"name": "2.1 Gerar Convite por Email",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.id) pm.collectionVariables.set('invitationId', data.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"jogador1@dota.local\",\n  \"targetRole\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/invitations",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "invitations"]
+						}
+					}
+				},
+				{
+					"name": "2.2 Listar Todos os Convites",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/invitations",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "invitations"]
+						}
+					}
+				},
+				{
+					"name": "2.3 Revogar / Desativar Convite",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/invitations/{{invitationId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "invitations", "{{invitationId}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Torneios",
+			"item": [
+				{
+					"name": "3.1 Consultar Opções de Formato (8 times)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/tournaments/options?teamCount=8",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "tournaments", "options"],
+							"query": [
+								{
+									"key": "teamCount",
+									"value": "8"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "3.2 Criar Torneio (Draft Mode Ativado)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var data = pm.response.json();",
+									"    if (data.tournamentId) pm.collectionVariables.set('tournamentId', data.tournamentId);",
+									"    if (data.draftSessionId) pm.collectionVariables.set('draftSessionId', data.draftSessionId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Dota 2 Champions Cup v1\",\n  \"teamCount\": 4,\n  \"formatType\": 1,\n  \"groupStageSeries\": 2,\n  \"playoffSeries\": 3,\n  \"finalSeries\": 3,\n  \"grandFinalResetSeries\": 1,\n  \"thirdPlaceSeries\": 1,\n  \"enableDraftMode\": true,\n  \"startersPerTeam\": 5,\n  \"reservesPerTeam\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/tournaments",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "tournaments"]
+						}
+					}
+				},
+				{
+					"name": "3.3 Encerrar Inscrições (Libera Botão do Draft)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/tournaments/{{tournamentId}}/registrations/close",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "tournaments", "{{tournamentId}}", "registrations", "close"]
+						}
+					}
+				},
+				{
+					"name": "3.4 Iniciar Torneio (Gera Partidas)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/tournaments/{{tournamentId}}/start",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "tournaments", "{{tournamentId}}", "start"]
+						}
+					}
+				},
+				{
+					"name": "3.5 Tabela de Classificação (Standings)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/tournaments/{{tournamentId}}/standings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "tournaments", "{{tournamentId}}", "standings"]
+						}
+					}
+				},
+				{
+					"name": "3.6 Listar Partidas do Torneio",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/tournaments/{{tournamentId}}/matches",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "tournaments", "{{tournamentId}}", "matches"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Draft & Jogadores",
+			"item": [
+				{
+					"name": "4.1 Obter Snapshot do Draft (Estado em Tempo Real)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/draft/{{draftSessionId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "draft", "{{draftSessionId}}"]
+						}
+					}
+				},
+				{
+					"name": "4.2 Adicionar Jogador Atrasado na Pool (Durante o Draft)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"ext-user-atrasado-99\",\n  \"nickname\": \"LatePlayer\",\n  \"steamId\": \"76561198000000099\",\n  \"roles\": [\"Mid\", \"Carry\"],\n  \"preferredRole\": \"Mid\",\n  \"rankTier\": 81,\n  \"avatarUrl\": \"https://steamcdn-a.akamaihd.net/avatar.jpg\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/draft/{{draftSessionId}}/late-players",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "draft", "{{draftSessionId}}", "late-players"]
+						}
+					}
+				},
+				{
+					"name": "4.3 Escolher Capitão do Time",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"teamId\": \"00000000-0000-0000-0000-000000000001\",\n  \"playerUserId\": \"ext-user-capitao-1\",\n  \"expectedVersion\": 0\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/draft/{{draftSessionId}}/captains",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "draft", "{{draftSessionId}}", "captains"]
+						}
+					}
+				},
+				{
+					"name": "4.4 Pick de Jogador Titular (Snake Draft)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"teamId\": \"00000000-0000-0000-0000-000000000001\",\n  \"playerUserId\": \"ext-user-player-2\",\n  \"expectedVersion\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/draft/{{draftSessionId}}/picks/starter",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "draft", "{{draftSessionId}}", "picks", "starter"]
+						}
+					}
+				}
+			]
+		}
+	]
+}

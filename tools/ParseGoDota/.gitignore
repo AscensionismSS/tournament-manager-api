@@ -1,0 +1,31 @@
+# Executáveis compildos do Go (não versionar binários)
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/parsegodota
+/dota-parser
+
+# Pastas de dados temporários e replays (ignora o conteúdo, mas mantém as pastas no Git)
+replays/*
+!replays/.gitkeep
+convertido/*
+!convertido/.gitkeep
+*.dem
+*.json
+
+# Documentação interna de desenvolvedor/IA (não subir para o Git público)
+doc_desenvolvedor.md
+
+# Configurações locais de IDEs (VS Code, GoLand, IntelliJ)
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Arquivos de logs locais
+*.log
