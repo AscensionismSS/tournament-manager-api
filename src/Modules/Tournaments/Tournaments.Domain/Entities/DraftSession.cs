@@ -139,9 +139,10 @@ public class DraftSession : AggregateRoot<Guid>
         var player = _playerPool.FirstOrDefault(p => p.Id == playerId)
             ?? throw new DomainException("Jogador não encontrado na pool de inscrições.");
 
-        bool isSelf = !string.IsNullOrWhiteSpace(player.ExternalUserId)
-            && !string.IsNullOrWhiteSpace(actingUserId)
-            && string.Equals(player.ExternalUserId.Trim(), actingUserId.Trim(), StringComparison.OrdinalIgnoreCase);
+        bool isSelf = (!string.IsNullOrWhiteSpace(actingUserId) && string.Equals(player.Id.ToString(), actingUserId.Trim(), StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(player.ExternalUserId)
+                && !string.IsNullOrWhiteSpace(actingUserId)
+                && string.Equals(player.ExternalUserId.Trim(), actingUserId.Trim(), StringComparison.OrdinalIgnoreCase));
 
         if (!isAdmin && !isSelf)
             throw new DomainException("Você não possui permissão para remover este jogador.");

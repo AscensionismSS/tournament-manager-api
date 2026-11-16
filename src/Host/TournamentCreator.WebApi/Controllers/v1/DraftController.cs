@@ -39,12 +39,19 @@ public class DraftController : ControllerBase
     public async Task<ActionResult<DraftStateSnapshotDto>> GetSnapshot(Guid draftSessionId, CancellationToken ct) =>
         Ok(await _sender.Send(new GetDraftSnapshotQuery(draftSessionId), ct));
 
-    [Authorize(Roles = "TournamentAdmin,SuperAdmin")]
+    [Authorize]
     [HttpPost("{draftSessionId:guid}/pool")]
-    public async Task<ActionResult<DraftStateSnapshotDto>> AddPlayerToPool(Guid draftSessionId, [FromBody] AddPlayerRequest request, CancellationToken ct) =>
-        Ok(await _sender.Send(new AddPlayerToPoolCommand(
-            draftSessionId, request.PlayerId ?? Guid.NewGuid(), request.Name,
+    public async Task<ActionResult<DraftStateSnapshotDto>> AddPlayerToPool(Guid draftSessionId, [FromBody] AddPlayerRequest request, CancellationToken ct)
+    {
+        var (actingUserId, isAdmin) = GetActingUserContext();
+        var effectivePlayerId = (!isAdmin && Guid.TryParse(actingUserId, out var parsedUserId))
+            ? parsedUserId
+            : (request.PlayerId ?? Guid.NewGuid());
+
+        return Ok(await _sender.Send(new AddPlayerToPoolCommand(
+            draftSessionId, effectivePlayerId, request.Name,
             request.ExternalUserId, request.Roles, request.PreferredRole, request.RankTier, request.AvatarUrl), ct));
+    }
 
     [Authorize(Roles = "TournamentAdmin,SuperAdmin")]
     [HttpPost("{draftSessionId:guid}/late-players")]
