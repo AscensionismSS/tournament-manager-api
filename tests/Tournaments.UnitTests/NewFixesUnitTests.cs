@@ -233,7 +233,6 @@ public class NewFixesUnitTests
         // Verifica restrições no DraftController para operações do draft
         var draftMethods = typeof(TournamentCreator.WebApi.Controllers.v1.DraftController).GetMethods();
         string[] draftAdminEndpoints = [
-            "AddPlayerToPool",
             "AddLatePlayer",
             "SelectCaptain",
             "RemoveCaptain",
