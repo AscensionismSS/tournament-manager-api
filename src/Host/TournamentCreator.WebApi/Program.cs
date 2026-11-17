@@ -264,8 +264,8 @@ if (enableSwagger)
 app.MapControllers();
 
 // Health Check público e para orquestradores (Kubernetes / Docker)
-app.MapGet("/healthz", () => Results.Ok("OK")).AllowAnonymous();
-app.MapGet("/api/v1/health", () => Results.Ok(new 
+app.MapMethods("/healthz", ["GET", "HEAD"], () => Results.Ok("OK")).AllowAnonymous();
+app.MapMethods("/api/v1/health", ["GET", "HEAD"], () => Results.Ok(new 
 { 
     status = "Healthy", 
     timestampUtc = DateTime.UtcNow 
