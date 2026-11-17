@@ -23,6 +23,7 @@ AGENTS.md
 # Segredos, Variáveis de Ambiente e Configurações Locais (NUNCA subir para o GitHub)
 .env
 .env.*
+!.env.example
 appsettings.Development.json
 appsettings.Local.json
 appsettings.*.local.json
