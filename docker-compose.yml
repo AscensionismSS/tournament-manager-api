@@ -51,6 +51,7 @@ services:
       - AdminSeed__Email=${ADMIN_SEED_EMAIL:-admin@tournament.local}
       - AdminSeed__Password=${ADMIN_SEED_PASSWORD:-}
       - ReplayParser__ExecutablePath=/app/tools/ParseGoDota/parsegodota
+      - PandaScore__ApiKey=${PANDASCORE_API_KEY:-}
     volumes:
       - api_uploads:/app/wwwroot/uploads
 

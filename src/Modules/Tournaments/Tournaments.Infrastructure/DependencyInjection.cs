@@ -28,6 +28,18 @@ public static class DependencyInjection
         services.AddSingleton<Tournaments.Application.Common.Interfaces.IDotaReplayParserService, Tournaments.Infrastructure.ReplayParsing.GoCliReplayParserService>();
         services.AddScoped<Tournaments.Application.Common.Interfaces.IFileStorageService, Tournaments.Infrastructure.Services.LocalFileStorageService>();
 
+        services.AddMemoryCache();
+        services.AddOptions<Tournaments.Infrastructure.ExternalServices.PandaScore.PandaScoreOptions>()
+            .Configure<IConfiguration>((opt, config) =>
+            {
+                config.GetSection(Tournaments.Infrastructure.ExternalServices.PandaScore.PandaScoreOptions.SectionName).Bind(opt);
+            });
+        services.AddHttpClient<Tournaments.Application.Common.Interfaces.IProMatchesService, Tournaments.Infrastructure.ExternalServices.PandaScore.PandaScoreProMatchesService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+            client.DefaultRequestHeaders.Add("User-Agent", "TournamentCreator/1.0");
+        });
+
         return services;
     }
 }
