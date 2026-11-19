@@ -4,8 +4,34 @@ namespace Tournaments.Infrastructure.ExternalServices.PandaScore;
 
 public static class PandaScoreProMatchesMapper
 {
-    public static ProMatchDto MapMatch(PandaScoreMatch match, bool isLive)
+    public static bool IsAllowedTier(string? tier)
     {
+        var normalized = NormalizeTier(tier);
+        return normalized is "S" or "A";
+    }
+
+    public static string GetTierLabel(string tier) => tier.ToUpperInvariant() switch
+    {
+        "S" => "MAJOR",
+        "A" => "PRO TIER A",
+        _ => tier.ToUpperInvariant()
+    };
+
+    public static ProMatchDto? TryMapMatch(
+        PandaScoreMatch match,
+        bool isLive,
+        IReadOnlyDictionary<long, string> knownTournamentTiers)
+    {
+        var tournamentId = match.Tournament?.Id ?? match.TournamentId;
+        var resolvedTier = NormalizeTier(match.Tournament?.Tier);
+        if (resolvedTier is null && knownTournamentTiers.TryGetValue(tournamentId, out var fallbackTier))
+        {
+            resolvedTier = fallbackTier;
+        }
+
+        if (resolvedTier is not ("S" or "A"))
+            return null;
+
         var opponentA = match.Opponents?.ElementAtOrDefault(0)?.Opponent;
         var opponentB = match.Opponents?.ElementAtOrDefault(1)?.Opponent;
 
@@ -28,10 +54,12 @@ public static class PandaScoreProMatchesMapper
 
         return new ProMatchDto(
             MatchId: match.Id,
-            TournamentId: match.Tournament?.Id ?? match.TournamentId,
+            TournamentId: tournamentId,
             TournamentName: tournamentName,
             LeagueName: leagueName,
             LeagueLogoUrl: SanitizeHttpUrl(match.League?.ImageUrl),
+            Tier: resolvedTier,
+            TierLabel: GetTierLabel(resolvedTier),
             Status: isLive ? "Live" : "Upcoming",
             Format: FormatMatchSeries(match.MatchType, match.NumberOfGames),
             ScheduledAtUtc: match.BeginAt ?? match.ScheduledAt,
@@ -43,6 +71,21 @@ public static class PandaScoreProMatchesMapper
         );
     }
 
+    public static Dictionary<long, string> BuildAllowedTournamentTierLookup(
+        IReadOnlyList<PandaScoreTournament> runningTournaments)
+    {
+        var lookup = new Dictionary<long, string>();
+        foreach (var t in runningTournaments)
+        {
+            var tier = NormalizeTier(t.Tier);
+            if (t.Id > 0 && tier is "S" or "A")
+            {
+                lookup[t.Id] = tier;
+            }
+        }
+        return lookup;
+    }
+
     public static IReadOnlyList<ProTournamentGroupDto> BuildTournamentGroups(
         IReadOnlyList<PandaScoreTournament> runningTournaments,
         IReadOnlyList<ProMatchDto> liveMatches,
@@ -52,7 +95,8 @@ public static class PandaScoreProMatchesMapper
 
         foreach (var t in runningTournaments)
         {
-            if (t.Id <= 0)
+            var tier = NormalizeTier(t.Tier);
+            if (t.Id <= 0 || tier is not ("S" or "A"))
                 continue;
 
             tournamentMap[t.Id] = new TournamentAccumulator
@@ -61,7 +105,8 @@ public static class PandaScoreProMatchesMapper
                 Name = BuildTournamentDisplayName(t.League?.Name, t.Serie?.FullName, t.Name),
                 LeagueName = t.League?.Name ?? t.Name ?? "Dota 2 Pro",
                 LeagueLogoUrl = SanitizeHttpUrl(t.League?.ImageUrl),
-                Tier = NormalizeTier(t.Tier),
+                Tier = tier,
+                TierLabel = GetTierLabel(tier),
                 PrizePool = string.IsNullOrWhiteSpace(t.Prizepool) ? null : t.Prizepool.Trim(),
                 BeginAtUtc = t.BeginAt,
                 EndAtUtc = t.EndAt
@@ -81,6 +126,7 @@ public static class PandaScoreProMatchesMapper
                 LeagueName: acc.LeagueName,
                 LeagueLogoUrl: acc.LeagueLogoUrl,
                 Tier: acc.Tier,
+                TierLabel: acc.TierLabel,
                 PrizePool: acc.PrizePool,
                 BeginAtUtc: acc.BeginAtUtc,
                 EndAtUtc: acc.EndAtUtc,
@@ -89,7 +135,7 @@ public static class PandaScoreProMatchesMapper
                 UpcomingMatches: acc.UpcomingMatches
             ))
             .OrderByDescending(t => t.HasLiveMatches)
-            .ThenBy(t => GetTierRank(t.Tier))
+            .ThenBy(t => t.Tier == "S" ? 0 : 1)
             .ThenBy(t => t.LiveMatches.FirstOrDefault()?.ScheduledAtUtc
                       ?? t.UpcomingMatches.FirstOrDefault()?.ScheduledAtUtc
                       ?? t.BeginAtUtc
@@ -141,7 +187,9 @@ public static class PandaScoreProMatchesMapper
                 TournamentId = match.TournamentId,
                 Name = match.TournamentName,
                 LeagueName = match.LeagueName,
-                LeagueLogoUrl = match.LeagueLogoUrl
+                LeagueLogoUrl = match.LeagueLogoUrl,
+                Tier = match.Tier,
+                TierLabel = match.TierLabel
             };
             map[match.TournamentId] = acc;
         }
@@ -241,23 +289,14 @@ public static class PandaScoreProMatchesMapper
     private static string? NormalizeTier(string? tier) =>
         string.IsNullOrWhiteSpace(tier) ? null : tier.Trim().ToUpperInvariant();
 
-    private static int GetTierRank(string? tier) => tier?.ToUpperInvariant() switch
-    {
-        "S" => 0,
-        "A" => 1,
-        "B" => 2,
-        "C" => 3,
-        "D" => 4,
-        _ => 5
-    };
-
     private sealed class TournamentAccumulator
     {
         public long TournamentId { get; init; }
         public string Name { get; init; } = string.Empty;
         public string LeagueName { get; init; } = string.Empty;
         public string? LeagueLogoUrl { get; init; }
-        public string? Tier { get; init; }
+        public string Tier { get; init; } = string.Empty;
+        public string TierLabel { get; init; } = string.Empty;
         public string? PrizePool { get; init; }
         public DateTime? BeginAtUtc { get; init; }
         public DateTime? EndAtUtc { get; init; }

@@ -51,7 +51,7 @@ public class ProMatchesTests
             "begin_at": "{{now.AddMinutes(-30):O}}",
             "league": { "name": "DreamLeague", "image_url": "https://cdn.example.com/dl.png" },
             "serie": { "full_name": "Season 25" },
-            "tournament": { "id": 500, "name": "Playoffs" },
+            "tournament": { "id": 500, "name": "Playoffs", "tier": "s" },
             "opponents": [
               { "opponent": { "id": 10, "name": "Team Liquid", "acronym": "TL", "image_url": "https://cdn.example.com/tl.png" } },
               { "opponent": { "id": 20, "name": "Team Spirit", "acronym": "TS", "image_url": "https://cdn.example.com/ts.png" } }
@@ -67,6 +67,18 @@ public class ProMatchesTests
               { "language": "pt", "main": false, "official": true, "raw_url": "https://www.twitch.tv/btsbrasiltv" },
               { "language": "pt", "main": false, "official": false, "raw_url": "javascript:alert(1)" }
             ]
+          },
+          {
+            "id": 1002,
+            "tournament_id": 800,
+            "match_type": "best_of",
+            "number_of_games": 3,
+            "begin_at": "{{now.AddMinutes(-15):O}}",
+            "league": { "name": "EPL Tier 2 Cup" },
+            "tournament": { "id": 800, "name": "Group Stage", "tier": "b" },
+            "opponents": [],
+            "results": [],
+            "streams_list": []
           }
         ]
         """;
@@ -127,6 +139,18 @@ public class ProMatchesTests
             "end_at": "{{now.AddDays(5):O}}",
             "league": { "name": "PGL Wallachia", "image_url": "https://cdn.example.com/pgl.png" },
             "serie": { "full_name": "Season 4" }
+          },
+          {
+            "id": 800,
+            "name": "Group Stage",
+            "tier": "b",
+            "league": { "name": "EPL Tier 2 Cup" }
+          },
+          {
+            "id": 900,
+            "name": "Open Qualifier",
+            "tier": "c",
+            "league": { "name": "Random Tier 3 Cup" }
           }
         ]
         """;
@@ -171,11 +195,12 @@ public class ProMatchesTests
         Assert.Single(firstOverview.LiveMatches);
         Assert.Equal(2, firstOverview.Tournaments.Count); // Torneio 700 (> 7 dias) foi filtrado!
 
-        // Torneio 500 (com partida ao vivo e Tier S) vem primeiro, separado do 600
+        // Torneio 500 (com partida ao vivo e Tier S) vem primeiro, separado do 600; Tier B (800) e C (900) filtrados!
         var dlTournament = firstOverview.Tournaments[0];
         Assert.Equal(500, dlTournament.TournamentId);
         Assert.True(dlTournament.HasLiveMatches);
         Assert.Equal("S", dlTournament.Tier);
+        Assert.Equal("MAJOR", dlTournament.TierLabel);
         Assert.Single(dlTournament.LiveMatches);
         Assert.Empty(dlTournament.UpcomingMatches);
 
@@ -185,6 +210,8 @@ public class ProMatchesTests
         Assert.Equal(1, liveMatch.ScoreTeamA);
         Assert.Equal(0, liveMatch.ScoreTeamB);
         Assert.Equal("BO3", liveMatch.Format);
+        Assert.Equal("S", liveMatch.Tier);
+        Assert.Equal("MAJOR", liveMatch.TierLabel);
 
         // Streams: apenas PT-BR e EN válidos (ru e javascript: descartados), PT-BR priorizado, Twitch e YouTube identificados
         Assert.Equal(3, liveMatch.Streams.Count);
@@ -196,9 +223,11 @@ public class ProMatchesTests
         Assert.Equal("en", liveMatch.Streams[2].Language);
         Assert.Equal("YouTube", liveMatch.Streams[2].Platform);
 
-        // Segundo torneio separado (PGL Wallachia) com sua partida upcoming
+        // Segundo torneio separado (PGL Wallachia) com sua partida upcoming e Tier A
         var pglTournament = firstOverview.Tournaments[1];
         Assert.Equal(600, pglTournament.TournamentId);
+        Assert.Equal("A", pglTournament.Tier);
+        Assert.Equal("PRO TIER A", pglTournament.TierLabel);
         Assert.False(pglTournament.HasLiveMatches);
         Assert.Single(pglTournament.UpcomingMatches);
         Assert.Equal("YouTube", pglTournament.UpcomingMatches[0].Streams[0].Platform);

@@ -75,6 +75,18 @@ public sealed class PandaScoreTournamentRef
 
     [JsonPropertyName("name")]
     public string? Name { get; set; }
+
+    [JsonPropertyName("tier")]
+    public string? Tier { get; set; }
+
+    [JsonPropertyName("prizepool")]
+    public string? Prizepool { get; set; }
+
+    [JsonPropertyName("begin_at")]
+    public DateTime? BeginAt { get; set; }
+
+    [JsonPropertyName("end_at")]
+    public DateTime? EndAt { get; set; }
 }
 
 public sealed class PandaScoreLeague

@@ -85,10 +85,14 @@ public class PandaScoreProMatchesService : IProMatchesService
 
         var nowUtc = DateTime.UtcNow;
         var maxUpcomingUtc = nowUtc.AddDays(Math.Clamp(_options.UpcomingWindowDays, 1, 30));
+        var allowedTierLookup = PandaScoreProMatchesMapper.BuildAllowedTournamentTierLookup(rawTournaments);
 
         var liveMatches = rawLive
-            .Select(m => PandaScoreProMatchesMapper.MapMatch(m, isLive: true))
-            .OrderBy(m => m.ScheduledAtUtc ?? DateTime.MaxValue)
+            .Select(m => PandaScoreProMatchesMapper.TryMapMatch(m, isLive: true, allowedTierLookup))
+            .Where(m => m is not null)
+            .Select(m => m!)
+            .OrderBy(m => m.Tier == "S" ? 0 : 1)
+            .ThenBy(m => m.ScheduledAtUtc ?? DateTime.MaxValue)
             .ToList();
 
         var upcomingMatches = rawUpcoming
@@ -97,8 +101,11 @@ public class PandaScoreProMatchesService : IProMatchesService
                 var start = m.BeginAt ?? m.ScheduledAt;
                 return !start.HasValue || (start.Value >= nowUtc.AddHours(-2) && start.Value <= maxUpcomingUtc);
             })
-            .Select(m => PandaScoreProMatchesMapper.MapMatch(m, isLive: false))
-            .OrderBy(m => m.ScheduledAtUtc ?? DateTime.MaxValue)
+            .Select(m => PandaScoreProMatchesMapper.TryMapMatch(m, isLive: false, allowedTierLookup))
+            .Where(m => m is not null)
+            .Select(m => m!)
+            .OrderBy(m => m.Tier == "S" ? 0 : 1)
+            .ThenBy(m => m.ScheduledAtUtc ?? DateTime.MaxValue)
             .ToList();
 
         var tournaments = PandaScoreProMatchesMapper.BuildTournamentGroups(rawTournaments, liveMatches, upcomingMatches);
