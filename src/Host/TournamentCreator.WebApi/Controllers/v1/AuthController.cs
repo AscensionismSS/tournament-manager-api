@@ -8,8 +8,10 @@ using Identity.Contracts.Auth;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TournamentCreator.WebApi.Controllers.v1.Requests;
 using TournamentCreator.WebApi.Extensions;
+using TournamentCreator.WebApi.Services;
 
 namespace TournamentCreator.WebApi.Controllers.v1;
 
@@ -26,6 +28,7 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicyAuthStrict)]
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponseDto>> Login(
         [FromBody] LoginApiRequest request,
@@ -36,6 +39,7 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicyAuthStrict)]
     [HttpPost("register-invite")]
     public async Task<ActionResult<AuthResponseDto>> RegisterWithInvite(
         [FromBody] RegisterWithInviteApiRequest request,
@@ -60,6 +64,7 @@ public class AuthController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicySteamPreview)]
     [HttpPost("link-steam")]
     public async Task<ActionResult<UserDto>> LinkSteam(
         [FromBody] LinkSteamApiRequest request,
@@ -93,6 +98,7 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicyAuthStrict)]
     [HttpPost("forgot-password")]
     public async Task<ActionResult<RecoveryActionResponseDto>> ForgotPassword(
         [FromBody] ForgotPasswordApiRequest request,
@@ -103,6 +109,7 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicyAuthStrict)]
     [HttpPost("reset-password")]
     public async Task<ActionResult<RecoveryActionResponseDto>> ResetPassword(
         [FromBody] ResetPasswordApiRequest request,
@@ -117,6 +124,7 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicyAuthStrict)]
     [HttpPost("forgot-login")]
     public async Task<ActionResult<RecoveryActionResponseDto>> ForgotLogin(
         [FromBody] ForgotLoginApiRequest request,
@@ -127,6 +135,7 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicyAuthStrict)]
     [HttpGet("recover-login")]
     public async Task<ActionResult<RecoveredLoginDto>> RecoverLogin(
         [FromQuery] string token,
@@ -147,6 +156,7 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicySteamPreview)]
     [HttpGet("preview-steam")]
     public async Task<ActionResult<Identity.Contracts.Steam.SteamPreviewDto>> PreviewSteam(
         [FromQuery] string identifier,

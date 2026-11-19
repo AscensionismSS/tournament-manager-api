@@ -28,3 +28,15 @@ public interface ICurrentUserService
     bool IsSuperAdmin { get; }
     bool IsTournamentAdmin { get; }
 }
+
+public record UserAuthSnapshot(bool Exists, bool IsActive, string Role);
+
+public interface IUserAuthStateCache
+{
+    Task<UserAuthSnapshot> GetOrLoadAsync(
+        Guid userId,
+        Func<CancellationToken, Task<UserAuthSnapshot>> factory,
+        CancellationToken ct = default);
+
+    void Invalidate(Guid userId);
+}

@@ -76,29 +76,75 @@ builder.Services.AddScoped<ITournamentRealtimeNotifier, TournamentRealtimeNotifi
 builder.Services.AddScoped<IUserRealtimeNotifier, UserRealtimeNotifier>();
 
 // Política de CORS com suporte a origens configuráveis para produção e suporte a WebSockets/SignalR
-var configuredOrigins = builder.Configuration["Cors:AllowedOrigins"]?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
+builder.Services.AddCors();
+builder.Services.AddOptions<Microsoft.AspNetCore.Cors.Infrastructure.CorsOptions>()
+    .Configure<IConfiguration, IHostEnvironment>((corsOptions, config, env) =>
     {
-        if (configuredOrigins != null && configuredOrigins.Length > 0 && !configuredOrigins.Contains("*"))
+        corsOptions.AddPolicy("AllowFrontend", policy =>
         {
-            policy.WithOrigins(configuredOrigins)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
-        }
-        else
-        {
-            policy.SetIsOriginAllowed(_ => true)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
-        }
+            ProductionSecurityValidator.ConfigureCorsPolicy(
+                policy,
+                config["Cors:AllowedOrigins"],
+                env.IsDevelopment());
+        });
     });
+
+// 4. Rate Limiting por IP para Endpoints Sensíveis (Autenticação, Recuperação, Convites e Steam/OpenDota)
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/problem+json";
+
+        if (context.Lease.TryGetMetadata(System.Threading.RateLimiting.MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        }
+
+        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
+        {
+            Status = StatusCodes.Status429TooManyRequests,
+            Title = "Muitas Requisições",
+            Type = "https://tournaments.local/errors/rate-limit-exceeded",
+            Detail = "Limite de tentativas excedido para este endereço IP. Aguarde um minuto antes de tentar novamente.",
+            Instance = context.HttpContext.Request.Path
+        };
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            problem,
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken: cancellationToken);
+    };
+
+    options.AddPolicy(ProductionSecurityValidator.RateLimitPolicyAuthStrict, httpContext =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: RateLimitClientIpResolver.ResolveClientIp(httpContext),
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+
+    options.AddPolicy(ProductionSecurityValidator.RateLimitPolicySteamPreview, httpContext =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: RateLimitClientIpResolver.ResolveClientIp(httpContext),
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 
-// 4. Módulos do Sistema (Modular Monolith)
+// 5. Módulos do Sistema (Modular Monolith)
 builder.Services.AddTournamentsApplication();
 builder.Services.AddTournamentsInfrastructure(builder.Configuration);
 builder.Services.AddIdentityApplication();
@@ -106,8 +152,13 @@ builder.Services.AddIdentityInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
+// Validação Fail-Fast de Segredos em Produção (após Build para honrar todas as fontes de configuração, antes de abrir portas ou tocar no banco)
+ProductionSecurityValidator.ValidateJwtSecret(
+    app.Configuration["Jwt:SecretKey"],
+    app.Environment.IsDevelopment());
+
 // 5. Inicialização automática do banco de dados (habilitada por padrão em Dev e Produção, controlável via Database:InitializeOnStartup)
-var initializeDbOnStartup = builder.Configuration.GetValue<bool>("Database:InitializeOnStartup", true);
+var initializeDbOnStartup = app.Configuration.GetValue<bool>("Database:InitializeOnStartup", true);
 if (initializeDbOnStartup)
 {
     using var scope = app.Services.CreateScope();
@@ -218,8 +269,14 @@ if (initializeDbOnStartup)
         // Seed Master SuperAdmin se a tabela estiver vazia
         if (!identityDbContext.Users.Any())
         {
-            var adminEmail = builder.Configuration["AdminSeed:Email"] ?? "admin@tournament.local";
-            var adminPassword = builder.Configuration["AdminSeed:Password"] ?? "Admin123!";
+            var adminEmail = app.Configuration["AdminSeed:Email"] ?? "admin@tournament.local";
+            var configuredAdminPassword = app.Configuration["AdminSeed:Password"];
+            ProductionSecurityValidator.ValidateAdminSeedPassword(configuredAdminPassword, app.Environment.IsDevelopment());
+
+            var adminPassword = string.IsNullOrWhiteSpace(configuredAdminPassword)
+                ? "Admin123!"
+                : configuredAdminPassword.Trim();
+
             var defaultAdmin = new Identity.Domain.Entities.User(
                 adminEmail,
                 passwordHasher.HashPassword(adminPassword),
@@ -231,14 +288,33 @@ if (initializeDbOnStartup)
             app.Logger.LogInformation("SuperAdmin padrão criado com sucesso: {Email}", adminEmail);
         }
     }
+    catch (InvalidOperationException)
+    {
+        throw;
+    }
     catch (Exception ex)
     {
         app.Logger.LogWarning("PostgreSQL não conectado durante startup. As tabelas serão gerenciadas externamente ou quando o banco subir: {Message}", ex.Message);
     }
 }
 
-// 6. Pipeline de Tratamento Global de Exceções e Middlewares
+// 6. Pipeline de Tratamento Global de Exceções, Headers de Segurança e Middlewares
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(static state =>
+    {
+        var httpContext = (HttpContext)state;
+        httpContext.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+        httpContext.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+        httpContext.Response.Headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+        return Task.CompletedTask;
+    }, context);
+
+    await next();
+});
+
 app.UseExceptionHandler();
+
 app.UseCors("AllowFrontend");
 app.UseStaticFiles();
 
@@ -247,10 +323,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-var enableSwagger = app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("Swagger:Enabled", false);
+var enableSwagger = app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled", false);
 if (enableSwagger)
 {
     app.UseSwagger();

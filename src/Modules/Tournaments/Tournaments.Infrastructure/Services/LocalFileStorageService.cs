@@ -13,14 +13,23 @@ public class LocalFileStorageService : IFileStorageService
     private readonly string _uploadsFolder;
     private const string RelativeBasePath = "/uploads/banners";
 
-    public LocalFileStorageService(ILogger<LocalFileStorageService> logger)
+    public LocalFileStorageService(ILogger<LocalFileStorageService> logger, string? uploadsFolder = null)
     {
         _logger = logger;
-        _uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "banners");
+        _uploadsFolder = string.IsNullOrWhiteSpace(uploadsFolder)
+            ? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "banners")
+            : uploadsFolder;
 
-        if (!Directory.Exists(_uploadsFolder))
+        try
         {
-            Directory.CreateDirectory(_uploadsFolder);
+            if (!Directory.Exists(_uploadsFolder))
+            {
+                Directory.CreateDirectory(_uploadsFolder);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Não foi possível inicializar antecipadamente o diretório de uploads '{UploadsFolder}'. Nova tentativa ocorrerá no upload.", _uploadsFolder);
         }
     }
 
@@ -30,6 +39,11 @@ public class LocalFileStorageService : IFileStorageService
         string contentType,
         CancellationToken cancellationToken = default)
     {
+        if (!Directory.Exists(_uploadsFolder))
+        {
+            Directory.CreateDirectory(_uploadsFolder);
+        }
+
         var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
         var uniqueFileName = $"{Guid.NewGuid():N}{extension}";
         var filePath = Path.Combine(_uploadsFolder, uniqueFileName);

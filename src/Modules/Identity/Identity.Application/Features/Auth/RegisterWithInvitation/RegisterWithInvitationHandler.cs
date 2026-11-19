@@ -80,7 +80,7 @@ public class RegisterWithInvitationHandler : IRequestHandler<RegisterWithInvitat
         }
 
         // SteamId é obrigatório no cadastro
-        if (!request.SteamId.HasValue || request.SteamId.Value <= 76561197960265728ul)
+        if (!request.SteamId.HasValue || !User.IsValidSteamId64(request.SteamId.Value))
         {
             return Result.Failure<AuthResponseDto>("A vinculação da conta Steam é obrigatória para concluir o cadastro. Busque e selecione seu perfil Steam.");
         }

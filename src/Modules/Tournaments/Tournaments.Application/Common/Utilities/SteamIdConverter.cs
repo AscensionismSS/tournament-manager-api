@@ -3,6 +3,7 @@ namespace Tournaments.Application.Common.Utilities;
 public static class SteamIdConverter
 {
     private const ulong Steam64Base = 76561197960265728UL;
+    private const ulong MaxSteam64 = Steam64Base + uint.MaxValue;
 
     public static long? ToAccountId(string? steamIdOrExternalUserId)
     {
@@ -11,12 +12,15 @@ public static class SteamIdConverter
 
         if (ulong.TryParse(steamIdOrExternalUserId.Trim(), out var parsed))
         {
-            if (parsed > Steam64Base)
+            if (parsed > Steam64Base && parsed <= MaxSteam64)
             {
                 return (long)(parsed - Steam64Base);
             }
 
-            return (long)parsed;
+            if (parsed > 0 && parsed <= uint.MaxValue)
+            {
+                return (long)parsed;
+            }
         }
 
         return null;

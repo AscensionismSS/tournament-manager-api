@@ -4,8 +4,10 @@ using Identity.Contracts.Invitations;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TournamentCreator.WebApi.Controllers.v1.Requests;
 using TournamentCreator.WebApi.Extensions;
+using TournamentCreator.WebApi.Services;
 
 namespace TournamentCreator.WebApi.Controllers.v1;
 
@@ -63,6 +65,7 @@ public class InvitationsController : ControllerBase
     }
 
     [AllowAnonymous]
+    [EnableRateLimiting(ProductionSecurityValidator.RateLimitPolicyAuthStrict)]
     [HttpGet("validate/{code}")]
     public async Task<ActionResult<ValidateInvitationDto>> ValidateInvitation(string code, CancellationToken ct)
     {

@@ -32,7 +32,7 @@ public class PreviewSteamHandler : IRequestHandler<PreviewSteamQuery, Result<Ste
         }
 
         ulong steamId = await _openDotaProfileService.ResolveSteamIdAsync(request.IdentifierOrUrl.Trim(), cancellationToken);
-        if (steamId < SteamIdOffset)
+        if (!Domain.Entities.User.IsValidSteamId64(steamId))
         {
             return Result.Failure<SteamPreviewDto>("SteamID ou Perfil Steam não encontrado ou inválido. Use o link do seu perfil (ex: https://steamcommunity.com/id/seu_nick ou https://steamcommunity.com/profiles/76561198000000001) ou seu SteamID numérico.");
         }

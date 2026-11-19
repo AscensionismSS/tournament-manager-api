@@ -10,13 +10,16 @@ public class UpdateMemberStatusHandler : IRequestHandler<UpdateMemberStatusComma
 {
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IUserAuthStateCache? _authStateCache;
 
     public UpdateMemberStatusHandler(
         IUserRepository userRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IUserAuthStateCache? authStateCache = null)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
+        _authStateCache = authStateCache;
     }
 
     public async Task<Result<MemberDto>> Handle(UpdateMemberStatusCommand request, CancellationToken cancellationToken)
@@ -32,6 +35,11 @@ public class UpdateMemberStatusHandler : IRequestHandler<UpdateMemberStatusComma
             return Result.Failure<MemberDto>("Administrador solicitante não encontrado.");
         }
 
+        if (!adminUser.IsActive)
+        {
+            return Result.Failure<MemberDto>("Sua conta está desativada.");
+        }
+
         var targetUser = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
         if (targetUser is null)
         {
@@ -42,6 +50,7 @@ public class UpdateMemberStatusHandler : IRequestHandler<UpdateMemberStatusComma
         {
             targetUser.SetActive(request.IsActive, request.Reason, adminUser);
             await _userRepository.UpdateAsync(targetUser, cancellationToken);
+            _authStateCache?.Invalidate(targetUser.Id);
 
             return Result.Success(targetUser.ToMemberDto());
         }

@@ -71,7 +71,9 @@ public static class DraftSnapshotMapper
     {
         string? friendId = null;
         string? steamUrl = null;
-        if (ulong.TryParse(player.ExternalUserId, out var steam64) && steam64 > 76561197960265728UL)
+        if (ulong.TryParse(player.ExternalUserId, out var steam64) &&
+            steam64 > 76561197960265728UL &&
+            steam64 <= 76561197960265728UL + uint.MaxValue)
         {
             friendId = ((uint)(steam64 - 76561197960265728UL)).ToString();
             steamUrl = $"https://steamcommunity.com/profiles/{steam64}";

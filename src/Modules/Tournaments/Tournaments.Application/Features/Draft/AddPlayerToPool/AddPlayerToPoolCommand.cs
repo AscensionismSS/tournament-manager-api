@@ -11,5 +11,6 @@ public record AddPlayerToPoolCommand(
     IReadOnlyList<string>? Roles = null,
     string? PreferredRole = null,
     int? RankTier = null,
-    string? AvatarUrl = null
+    string? AvatarUrl = null,
+    bool IsAdmin = true
 ) : IRequest<DraftStateSnapshotDto>;

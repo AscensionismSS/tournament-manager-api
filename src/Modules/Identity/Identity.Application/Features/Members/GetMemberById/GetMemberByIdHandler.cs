@@ -1,4 +1,5 @@
 using BuildingBlocks.Domain;
+using Identity.Application.Common.Interfaces;
 using Identity.Contracts.Members;
 using Identity.Domain.Repositories;
 using MediatR;
@@ -8,10 +9,14 @@ namespace Identity.Application.Features.Members.GetMemberById;
 public class GetMemberByIdHandler : IRequestHandler<GetMemberByIdQuery, Result<MemberDto>>
 {
     private readonly IUserRepository _userRepository;
+    private readonly ICurrentUserService? _currentUserService;
 
-    public GetMemberByIdHandler(IUserRepository userRepository)
+    public GetMemberByIdHandler(
+        IUserRepository userRepository,
+        ICurrentUserService? currentUserService = null)
     {
         _userRepository = userRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<Result<MemberDto>> Handle(
@@ -24,6 +29,9 @@ public class GetMemberByIdHandler : IRequestHandler<GetMemberByIdQuery, Result<M
             return Result.Failure<MemberDto>("Membro não encontrado.");
         }
 
-        return Result.Success(user.ToMemberDto());
+        bool isAdminCaller = _currentUserService?.IsTournamentAdmin == true || _currentUserService?.IsSuperAdmin == true;
+        bool isSelf = _currentUserService?.IsAuthenticated == true && _currentUserService.UserId == user.Id;
+
+        return Result.Success(user.ToMemberDto(includeSensitiveData: isAdminCaller || isSelf));
     }
 }

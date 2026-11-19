@@ -1,4 +1,5 @@
 using FluentValidation;
+using Identity.Domain.Entities;
 
 namespace Identity.Application.Features.Auth.RegisterWithInvitation;
 
@@ -24,6 +25,6 @@ public class RegisterWithInvitationValidator : AbstractValidator<RegisterWithInv
 
         RuleFor(x => x.SteamId)
             .NotNull().WithMessage("A vinculação da conta Steam é obrigatória para o cadastro.")
-            .GreaterThan(76561197960265728ul).WithMessage("SteamID inválido. Faça a busca e confirme sua conta Steam.");
+            .Must(id => id.HasValue && User.IsValidSteamId64(id.Value)).WithMessage("SteamID inválido. Faça a busca e confirme sua conta Steam.");
     }
 }

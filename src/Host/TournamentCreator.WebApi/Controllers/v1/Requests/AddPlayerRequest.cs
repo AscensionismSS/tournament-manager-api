@@ -1,8 +1,8 @@
 namespace TournamentCreator.WebApi.Controllers.v1.Requests;
 
 public record AddPlayerRequest(
-    Guid? PlayerId,
-    string Name,
+    Guid? PlayerId = null,
+    string Name = "",
     string? ExternalUserId = null,
     IReadOnlyList<string>? Roles = null,
     string? PreferredRole = null,

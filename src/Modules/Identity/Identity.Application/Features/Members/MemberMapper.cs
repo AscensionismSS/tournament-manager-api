@@ -7,7 +7,7 @@ public static class MemberMapper
 {
     private const ulong SteamIdOffset = 76561197960265728UL;
 
-    public static MemberDto ToMemberDto(this User user)
+    public static MemberDto ToMemberDto(this User user, bool includeSensitiveData = true)
     {
         string? dotaFriendId = null;
         string? steamIdStr = null;
@@ -20,12 +20,12 @@ public static class MemberMapper
             steamIdStr = steam64.ToString();
             steamProfileUrl = $"https://steamcommunity.com/profiles/{steam64}";
 
-            if (steam64 > SteamIdOffset)
+            if (User.IsValidSteamId64(steam64))
             {
                 uint friendId = (uint)(steam64 - SteamIdOffset);
                 dotaFriendId = friendId.ToString();
             }
-            else
+            else if (steam64 <= uint.MaxValue)
             {
                 dotaFriendId = steam64.ToString();
             }
@@ -33,7 +33,7 @@ public static class MemberMapper
 
         return new MemberDto(
             UserId: user.Id,
-            Email: user.Email,
+            Email: includeSensitiveData ? user.Email : string.Empty,
             DisplayName: user.DisplayName,
             PersonaName: user.DotaPersonaName,
             AvatarUrl: user.DotaAvatarUrl,
@@ -47,7 +47,7 @@ public static class MemberMapper
             Role: user.Role.ToString(),
             IsSteamLocked: user.IsSteamLocked,
             IsActive: user.IsActive,
-            StatusReason: user.StatusReason,
+            StatusReason: includeSensitiveData ? user.StatusReason : null,
             IsTournamentEligible: user.IsTournamentEligible
         );
     }

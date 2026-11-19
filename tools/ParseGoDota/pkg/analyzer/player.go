@@ -656,8 +656,42 @@ func itemName(heroEntity *manta.Entity, slot int, parser *manta.Parser) string {
 	if e == nil {
 		return ""
 	}
+
+	// Prioriza o nome canônico oficial da Valve (tabela EntityNames),
+	// garantindo nomes exatos com underscores (ex: item_flayers_bota, item_power_treads)
+	// e suportando itens novos que usem a classe genérica CDOTA_Item.
+	if nameIdx, ok := entityNameIndex(e); ok && nameIdx >= 0 {
+		if canonical, found := parser.LookupStringByIndex("EntityNames", nameIdx); found {
+			canonical = strings.ToLower(strings.TrimSpace(canonical))
+			if strings.HasPrefix(canonical, "item_") {
+				return canonical
+			}
+		}
+	}
+
 	name := strings.TrimPrefix(e.GetClassName(), "CDOTA_Item_")
 	return "item_" + strings.ToLower(strings.ReplaceAll(name, " ", "_"))
+}
+
+func entityNameIndex(e *manta.Entity) (int32, bool) {
+	val := e.Get("m_pEntity.m_nameStringableIndex")
+	if val == nil {
+		return -1, false
+	}
+	switch v := val.(type) {
+	case int32:
+		return v, true
+	case uint32:
+		return int32(v), true
+	case int:
+		return int32(v), true
+	case int64:
+		return int32(v), true
+	case uint64:
+		return int32(v), true
+	default:
+		return -1, false
+	}
 }
 
 var heroDisplayNames = map[string]string{

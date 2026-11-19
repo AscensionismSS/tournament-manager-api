@@ -172,6 +172,7 @@ public class MatchesController : ControllerBase
     [HttpPost("{id:guid}/replay")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(350 * 1024 * 1024)] // 350 MB
+    [RequestFormLimits(MultipartBodyLengthLimit = 350 * 1024 * 1024)] // 350 MB
     public async Task<ActionResult<UploadMatchReplayResult>> UploadReplay(
         Guid id,
         IFormFile replayFile,
@@ -207,6 +208,7 @@ public class MatchesController : ControllerBase
     [HttpPost("{id:guid}/games/{gameNumber:int}/replay")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(350 * 1024 * 1024)] // 350 MB
+    [RequestFormLimits(MultipartBodyLengthLimit = 350 * 1024 * 1024)] // 350 MB
     public async Task<ActionResult<UploadMatchReplayResult>> UploadGameReplay(
         Guid id,
         int gameNumber,

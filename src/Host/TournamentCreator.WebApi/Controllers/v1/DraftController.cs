@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Asp.Versioning;
+using Identity.Application.Features.Members.GetMemberById;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -41,24 +42,134 @@ public class DraftController : ControllerBase
 
     [Authorize]
     [HttpPost("{draftSessionId:guid}/pool")]
-    public async Task<ActionResult<DraftStateSnapshotDto>> AddPlayerToPool(Guid draftSessionId, [FromBody] AddPlayerRequest request, CancellationToken ct)
+    public async Task<ActionResult<DraftStateSnapshotDto>> AddPlayerToPool(
+        Guid draftSessionId,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] AddPlayerRequest? request,
+        CancellationToken ct)
     {
         var (actingUserId, isAdmin) = GetActingUserContext();
-        var effectivePlayerId = (!isAdmin && Guid.TryParse(actingUserId, out var parsedUserId))
-            ? parsedUserId
-            : (request.PlayerId ?? Guid.NewGuid());
+        if (!isAdmin)
+        {
+            if (!Guid.TryParse(actingUserId, out var parsedUserId) || parsedUserId == Guid.Empty)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+                {
+                    Title = "Acesso Negado",
+                    Detail = "Identificador do usuário autenticado inválido.",
+                    Status = StatusCodes.Status403Forbidden
+                });
+            }
+
+            var memberResult = await _sender.Send(new GetMemberByIdQuery(parsedUserId), ct);
+            if (memberResult.IsFailure)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+                {
+                    Title = "Usuário Não Encontrado",
+                    Detail = "Não foi possível localizar o cadastro oficial do usuário autenticado.",
+                    Status = StatusCodes.Status403Forbidden
+                });
+            }
+
+            var validationError = ValidateOfficialPlayerProfile(memberResult.Value);
+            if (validationError is not null)
+            {
+                return validationError;
+            }
+
+            var officialUser = memberResult.Value;
+            return Ok(await _sender.Send(new AddPlayerToPoolCommand(
+                draftSessionId,
+                officialUser.UserId,
+                officialUser.DisplayName,
+                officialUser.SteamId,
+                officialUser.Roles,
+                officialUser.PreferredRole,
+                officialUser.RankTier,
+                officialUser.AvatarUrl,
+                IsAdmin: false), ct));
+        }
+
+        if (request is null)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Dados Inválidos",
+                Detail = "Os dados do jogador são obrigatórios.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        // Se o próprio administrador estiver se inscrevendo no torneio, utiliza os dados oficiais do banco
+        if (Guid.TryParse(actingUserId, out var adminUserId) &&
+            adminUserId != Guid.Empty &&
+            request.PlayerId == adminUserId)
+        {
+            var selfAdminResult = await _sender.Send(new GetMemberByIdQuery(adminUserId), ct);
+            if (selfAdminResult.IsSuccess)
+            {
+                var validationError = ValidateOfficialPlayerProfile(selfAdminResult.Value);
+                if (validationError is not null)
+                {
+                    return validationError;
+                }
+
+                var officialAdmin = selfAdminResult.Value;
+                return Ok(await _sender.Send(new AddPlayerToPoolCommand(
+                    draftSessionId,
+                    officialAdmin.UserId,
+                    officialAdmin.DisplayName,
+                    officialAdmin.SteamId,
+                    officialAdmin.Roles,
+                    officialAdmin.PreferredRole,
+                    officialAdmin.RankTier,
+                    officialAdmin.AvatarUrl,
+                    IsAdmin: true), ct));
+            }
+        }
+
+        var effectivePlayerId = request.PlayerId ?? Guid.NewGuid();
+        var effectiveExternalUserId = request.ExternalUserId;
+        if (string.IsNullOrWhiteSpace(effectiveExternalUserId) &&
+            request.PlayerId.HasValue &&
+            request.PlayerId.Value != Guid.Empty)
+        {
+            var targetMember = await _sender.Send(new GetMemberByIdQuery(request.PlayerId.Value), ct);
+            if (targetMember.IsSuccess && !string.IsNullOrWhiteSpace(targetMember.Value.SteamId))
+            {
+                effectiveExternalUserId = targetMember.Value.SteamId;
+            }
+        }
 
         return Ok(await _sender.Send(new AddPlayerToPoolCommand(
             draftSessionId, effectivePlayerId, request.Name,
-            request.ExternalUserId, request.Roles, request.PreferredRole, request.RankTier, request.AvatarUrl), ct));
+            effectiveExternalUserId, request.Roles, request.PreferredRole, request.RankTier, request.AvatarUrl, IsAdmin: true), ct));
     }
 
     [Authorize(Roles = "TournamentAdmin,SuperAdmin")]
     [HttpPost("{draftSessionId:guid}/late-players")]
-    public async Task<ActionResult<DraftStateSnapshotDto>> AddLatePlayer(Guid draftSessionId, [FromBody] AddLatePlayerRequest request, CancellationToken ct) =>
-        Ok(await _sender.Send(new AddLatePlayerToPoolCommand(
-            draftSessionId, request.PlayerId ?? Guid.NewGuid(), request.Name,
-            request.ExternalUserId, request.Roles, request.PreferredRole, request.RankTier, request.AvatarUrl, request.ExpectedVersion), ct));
+    public async Task<ActionResult<DraftStateSnapshotDto>> AddLatePlayer(Guid draftSessionId, [FromBody] AddLatePlayerRequest request, CancellationToken ct)
+    {
+        var effectivePlayerId = request.PlayerId ?? Guid.NewGuid();
+        var effectiveExternalUserId = request.ExternalUserId;
+        var effectiveRankTier = request.RankTier;
+        var effectiveAvatarUrl = request.AvatarUrl;
+
+        if (request.PlayerId.HasValue && request.PlayerId.Value != Guid.Empty && string.IsNullOrWhiteSpace(effectiveExternalUserId))
+        {
+            var memberResult = await _sender.Send(new GetMemberByIdQuery(request.PlayerId.Value), ct);
+            if (memberResult.IsSuccess)
+            {
+                effectiveExternalUserId = memberResult.Value.SteamId;
+                effectiveRankTier ??= memberResult.Value.RankTier;
+                effectiveAvatarUrl ??= memberResult.Value.AvatarUrl;
+            }
+        }
+
+        return Ok(await _sender.Send(new AddLatePlayerToPoolCommand(
+            draftSessionId, effectivePlayerId, request.Name,
+            effectiveExternalUserId, request.Roles, request.PreferredRole, effectiveRankTier, effectiveAvatarUrl, request.ExpectedVersion), ct));
+    }
 
     [Authorize(Roles = "TournamentAdmin,SuperAdmin")]
     [HttpPost("{draftSessionId:guid}/captains")]
@@ -158,10 +269,45 @@ public class DraftController : ControllerBase
         return Ok(await _sender.Send(new RenameTeamCommand(draftSessionId, effectiveTeamId.Value, request.NewName, request.ExpectedVersion, actingUserId, isAdmin), ct));
     }
 
+    private ActionResult? ValidateOfficialPlayerProfile(Identity.Contracts.Members.MemberDto officialUser)
+    {
+        if (!officialUser.IsActive)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+            {
+                Title = "Conta Desativada",
+                Detail = "Sua conta está desativada e não pode participar de torneios.",
+                Status = StatusCodes.Status403Forbidden
+            });
+        }
+
+        if (!officialUser.IsTournamentEligible)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ProblemDetails
+            {
+                Title = "Inscrição Não Permitida",
+                Detail = "Sua conta não está elegível para inscrição em torneios no momento.",
+                Status = StatusCodes.Status403Forbidden
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(officialUser.SteamId))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Steam Não Vinculada",
+                Detail = "Você precisa vincular uma conta Steam válida antes de se inscrever no draft.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        return null;
+    }
+
     private (string ActingUserId, bool IsAdmin) GetActingUserContext()
     {
-        if (User is null)
-            return (string.Empty, true);
+        if (User?.Identity?.IsAuthenticated != true)
+            return (string.Empty, false);
 
         var actingUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? User.FindFirst("sub")?.Value

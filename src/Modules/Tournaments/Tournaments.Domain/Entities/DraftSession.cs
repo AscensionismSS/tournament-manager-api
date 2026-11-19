@@ -55,7 +55,7 @@ public class DraftSession : AggregateRoot<Guid>
         if (State == DraftState.Completed)
             throw new DomainException("Não é possível adicionar jogadores a um draft já concluído.");
 
-        EnsurePlayerNotAlreadyRegistered(playerId, name);
+        EnsurePlayerNotAlreadyRegistered(playerId, name, externalUserId);
         _playerPool.Add(new DraftPlayer(playerId, name.Trim(), externalUserId, roles, preferredRole, rankTier, avatarUrl));
         DraftVersion++;
     }
@@ -75,7 +75,7 @@ public class DraftSession : AggregateRoot<Guid>
             ValidateVersion(expectedVersion.Value);
         }
 
-        EnsurePlayerNotAlreadyRegistered(playerId, name);
+        EnsurePlayerNotAlreadyRegistered(playerId, name, externalUserId);
         _playerPool.Add(new DraftPlayer(playerId, name.Trim(), externalUserId, roles, preferredRole, rankTier, avatarUrl));
         DraftVersion++;
     }
@@ -364,13 +364,32 @@ public class DraftSession : AggregateRoot<Guid>
         DraftVersion++;
     }
 
-    private void EnsurePlayerNotAlreadyRegistered(Guid playerId, string name)
+    private void EnsurePlayerNotAlreadyRegistered(Guid playerId, string name, string? externalUserId = null)
     {
-        if (_playerPool.Any(p => p.Id == playerId || p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            throw new DomainException($"Jogador '{name}' já está na pool.");
+        var trimmedName = name.Trim();
 
-        if (_teams.Any(t => t.Starters.Any(p => p.Id == playerId) || t.Reserves.Any(p => p.Id == playerId)))
-            throw new DomainException($"Jogador '{name}' já está alocado em uma equipe.");
+        if (_playerPool.Any(p => p.Id == playerId || p.Name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase)))
+            throw new DomainException($"Jogador '{trimmedName}' já está na pool.");
+
+        if (_teams.Any(t =>
+                t.Starters.Any(p => p.Id == playerId || p.Name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase)) ||
+                t.Reserves.Any(p => p.Id == playerId || p.Name.Equals(trimmedName, StringComparison.OrdinalIgnoreCase))))
+            throw new DomainException($"Jogador '{trimmedName}' já está alocado em uma equipe.");
+
+        if (!string.IsNullOrWhiteSpace(externalUserId))
+        {
+            var normalizedExtId = externalUserId.Trim();
+            bool duplicateSteamInPool = _playerPool.Any(p =>
+                !string.IsNullOrWhiteSpace(p.ExternalUserId) &&
+                p.ExternalUserId.Trim().Equals(normalizedExtId, StringComparison.OrdinalIgnoreCase));
+
+            bool duplicateSteamInTeams = _teams.Any(t =>
+                t.Starters.Any(p => !string.IsNullOrWhiteSpace(p.ExternalUserId) && p.ExternalUserId.Trim().Equals(normalizedExtId, StringComparison.OrdinalIgnoreCase)) ||
+                t.Reserves.Any(p => !string.IsNullOrWhiteSpace(p.ExternalUserId) && p.ExternalUserId.Trim().Equals(normalizedExtId, StringComparison.OrdinalIgnoreCase)));
+
+            if (duplicateSteamInPool || duplicateSteamInTeams)
+                throw new DomainException($"A conta Steam / identificador externo '{normalizedExtId}' já está inscrita neste draft.");
+        }
     }
 
     private void ValidateVersion(int expectedVersion)

@@ -5,6 +5,12 @@ namespace Identity.Domain.Entities;
 
 public class User : AggregateRoot<Guid>
 {
+    public const ulong SteamId64Base = 76561197960265728UL;
+    public const ulong MaxSteamId64 = SteamId64Base + uint.MaxValue;
+
+    public static bool IsValidSteamId64(ulong steamId) =>
+        steamId > SteamId64Base && steamId <= MaxSteamId64;
+
     public string Email { get; private set; } = string.Empty;
     public string PasswordHash { get; private set; } = string.Empty;
     public string DisplayName { get; private set; } = string.Empty;
@@ -69,7 +75,7 @@ public class User : AggregateRoot<Guid>
         int? rankTier = null,
         int? leaderboardRank = null)
     {
-        if (steamId == 0)
+        if (!IsValidSteamId64(steamId))
             throw new DomainException("SteamID inválido.");
 
         if (IsSteamLocked)

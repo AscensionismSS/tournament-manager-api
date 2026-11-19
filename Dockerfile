@@ -63,7 +63,9 @@ COPY --from=go-builder /out/parsegodota /app/tools/ParseGoDota/parsegodota
 RUN chmod +x /app/tools/ParseGoDota/parsegodota
 
 # Cria diretórios essenciais para uploads estáticos e execuções isoladas do parser
-RUN mkdir -p /app/wwwroot/uploads/banners /app/tools/ParseGoDota/runs
+# e transfere a propriedade de /app para o usuário não-root oficial do .NET ($APP_UID)
+RUN mkdir -p /app/wwwroot/uploads/banners /app/tools/ParseGoDota/runs \
+    && chown -R $APP_UID:$APP_UID /app
 
 # Configurações de ambiente para execução em contêiner
 ENV ASPNETCORE_URLS=http://+:8080 \
@@ -75,5 +77,7 @@ EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8080/healthz || exit 1
+
+USER $APP_UID
 
 ENTRYPOINT ["dotnet", "TournamentCreator.WebApi.dll"]

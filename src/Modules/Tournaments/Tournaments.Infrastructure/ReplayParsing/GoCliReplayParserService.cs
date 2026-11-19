@@ -14,18 +14,34 @@ public class GoCliReplayParserService : IDotaReplayParserService
     private static readonly byte[] ExpectedMagicBytes = Encoding.ASCII.GetBytes("PBDEMS2\0");
     private const long MinReplaySizeBytes = 500 * 1024; // 500 KB
     private const long MaxReplaySizeBytes = 350 * 1024 * 1024; // 350 MB
+    private static readonly SemaphoreSlim DefaultParserConcurrencyGate = new(2, 2);
+    private static readonly JsonSerializerOptions ParserJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+    };
 
     private readonly string _toolsDir;
     private readonly string _executablePath;
     private readonly ILogger<GoCliReplayParserService> _logger;
+    private readonly SemaphoreSlim _concurrencyGate;
+    private readonly TimeSpan _queueTimeout;
 
     private static readonly string[] CandidateBinaryNames = OperatingSystem.IsWindows()
         ? ["parsegodota.exe", "parsegodota", "dota-parser.exe", "dota-parser"]
         : ["parsegodota", "dota-parser", "parsegodota.exe"];
 
-    public GoCliReplayParserService(IConfiguration configuration, ILogger<GoCliReplayParserService> logger)
+    public GoCliReplayParserService(
+        IConfiguration configuration,
+        ILogger<GoCliReplayParserService> logger,
+        SemaphoreSlim? concurrencyGate = null)
     {
         _logger = logger;
+        _concurrencyGate = concurrencyGate ?? DefaultParserConcurrencyGate;
+        var configuredTimeoutMs = configuration.GetValue<int?>("ReplayParser:QueueTimeoutMs");
+        _queueTimeout = configuredTimeoutMs is > 0
+            ? TimeSpan.FromMilliseconds(configuredTimeoutMs.Value)
+            : TimeSpan.FromSeconds(30);
 
         // Procura pasta tools/ParseGoDota a partir do diretório base da aplicação ou raiz da solution
         var baseDir = AppContext.BaseDirectory;
@@ -103,18 +119,38 @@ public class GoCliReplayParserService : IDotaReplayParserService
         if (!File.Exists(_executablePath))
             throw new DomainException($"Executável do parser de replay não encontrado em: {_executablePath}");
 
+        bool gateAcquired = await _concurrencyGate.WaitAsync(_queueTimeout, cancellationToken);
+        if (!gateAcquired)
+        {
+            _logger.LogWarning("Fila do parser de replays saturada (timeout de {TimeoutSeconds}s excedido).", _queueTimeout.TotalSeconds);
+            throw new DomainException("O servidor está processando o limite máximo de replays simultâneos no momento. Aguarde alguns segundos e tente novamente.");
+        }
+
         var runId = Guid.NewGuid().ToString("N");
         var isolatedRunDir = Path.Combine(_toolsDir, "runs", runId);
         var replaysDir = Path.Combine(isolatedRunDir, "replays");
         var convertidoDir = Path.Combine(isolatedRunDir, "convertido");
-        Directory.CreateDirectory(replaysDir);
-        Directory.CreateDirectory(convertidoDir);
-
-        var tempFileName = $"{Guid.NewGuid():N}.dem";
-        var tempFilePath = Path.Combine(replaysDir, tempFileName);
 
         try
         {
+            try
+            {
+                Directory.CreateDirectory(replaysDir);
+                Directory.CreateDirectory(convertidoDir);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                isolatedRunDir = Path.Combine(Path.GetTempPath(), "TournamentCreator", "parsegodota_runs", runId);
+                replaysDir = Path.Combine(isolatedRunDir, "replays");
+                convertidoDir = Path.Combine(isolatedRunDir, "convertido");
+                _logger.LogWarning(ex, "Diretório '{ToolsDir}' indisponível para escrita; utilizando diretório temporário isolado '{FallbackDir}'.", _toolsDir, isolatedRunDir);
+                Directory.CreateDirectory(replaysDir);
+                Directory.CreateDirectory(convertidoDir);
+            }
+
+            var tempFileName = $"{Guid.NewGuid():N}.dem";
+            var tempFilePath = Path.Combine(replaysDir, tempFileName);
+
             // 2. Grava o stream no disco na pasta isolada
             replayStream.Position = 0;
             await using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -149,16 +185,10 @@ public class GoCliReplayParserService : IDotaReplayParserService
                     throw new DomainException("O parser concluiu a execução mas o arquivo JSON gerado está vazio.");
                 }
 
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-                };
-
                 ParseGoDotaOutputDto? parsedResult;
                 try
                 {
-                    parsedResult = JsonSerializer.Deserialize<ParseGoDotaOutputDto>(jsonContent, options);
+                    parsedResult = JsonSerializer.Deserialize<ParseGoDotaOutputDto>(jsonContent, ParserJsonOptions);
                 }
                 catch (JsonException ex)
                 {
@@ -206,6 +236,8 @@ public class GoCliReplayParserService : IDotaReplayParserService
             {
                 _logger.LogWarning(ex, "Falha ao limpar diretório temporário isolado {Directory}", isolatedRunDir);
             }
+
+            _concurrencyGate.Release();
         }
     }
 
@@ -235,20 +267,37 @@ public class GoCliReplayParserService : IDotaReplayParserService
         var psi = new ProcessStartInfo
         {
             FileName = _executablePath,
-            Arguments = argReplayPath,
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        psi.ArgumentList.Add(argReplayPath);
 
+        const int MaxCapturedOutputChars = 64 * 1024;
         using var process = new Process { StartInfo = psi };
         var stdOutBuilder = new StringBuilder();
         var stdErrBuilder = new StringBuilder();
 
-        process.OutputDataReceived += (_, e) => { if (e.Data != null) stdOutBuilder.AppendLine(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data != null) stdErrBuilder.AppendLine(e.Data); };
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is null) return;
+            lock (stdOutBuilder)
+            {
+                if (stdOutBuilder.Length < MaxCapturedOutputChars)
+                    stdOutBuilder.AppendLine(e.Data);
+            }
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is null) return;
+            lock (stdErrBuilder)
+            {
+                if (stdErrBuilder.Length < MaxCapturedOutputChars)
+                    stdErrBuilder.AppendLine(e.Data);
+            }
+        };
 
         process.Start();
         process.BeginOutputReadLine();
