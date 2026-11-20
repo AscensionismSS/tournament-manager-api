@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using TournamentCreator.WebApi.Controllers.v1.Requests;
 using TournamentCreator.WebApi.Extensions;
 using TournamentCreator.WebApi.Services;
+using Tournaments.Domain.Repositories;
 
 namespace TournamentCreator.WebApi.Controllers.v1;
 
@@ -17,10 +18,14 @@ namespace TournamentCreator.WebApi.Controllers.v1;
 public class InvitationsController : ControllerBase
 {
     private readonly ISender _sender;
+    private readonly ISystemSecuritySettingsRepository? _securitySettingsRepository;
 
-    public InvitationsController(ISender sender)
+    public InvitationsController(
+        ISender sender,
+        ISystemSecuritySettingsRepository? securitySettingsRepository = null)
     {
         _sender = sender;
+        _securitySettingsRepository = securitySettingsRepository;
     }
 
     [Authorize(Roles = "TournamentAdmin,SuperAdmin")]
@@ -36,6 +41,23 @@ public class InvitationsController : ControllerBase
         [FromBody] CreateInvitationApiRequest request,
         CancellationToken ct)
     {
+        if (_securitySettingsRepository is not null)
+        {
+            var settings = await _securitySettingsRepository.GetAsync(ct);
+            if (settings.MaintenanceMode)
+            {
+                var detail = !string.IsNullOrWhiteSpace(settings.Message) ? $" Motivo: {settings.Message}" : string.Empty;
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+                {
+                    Status = StatusCodes.Status503ServiceUnavailable,
+                    Title = "Sistema em Modo de Manutenção",
+                    Type = "https://tournaments.local/errors/maintenance-mode",
+                    Detail = $"A criação de novos convites está temporariamente bloqueada enquanto o modo de manutenção estiver ativo.{detail}",
+                    Instance = HttpContext?.Request.Path
+                });
+            }
+        }
+
         int validHours = request.ValidHours.GetValueOrDefault(24);
         var result = await _sender.Send(new CreateInvitationCommand(request.Email, request.TargetRole, validHours), ct);
         if (result.IsFailure)

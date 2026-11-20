@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using TournamentCreator.WebApi.Controllers.v1.Requests;
 using TournamentCreator.WebApi.Extensions;
 using TournamentCreator.WebApi.Services;
+using Tournaments.Domain.Repositories;
 
 namespace TournamentCreator.WebApi.Controllers.v1;
 
@@ -21,10 +22,14 @@ namespace TournamentCreator.WebApi.Controllers.v1;
 public class AuthController : ControllerBase
 {
     private readonly ISender _sender;
+    private readonly ISystemSecuritySettingsRepository? _securitySettingsRepository;
 
-    public AuthController(ISender sender)
+    public AuthController(
+        ISender sender,
+        ISystemSecuritySettingsRepository? securitySettingsRepository = null)
     {
         _sender = sender;
+        _securitySettingsRepository = securitySettingsRepository;
     }
 
     [AllowAnonymous]
@@ -45,6 +50,23 @@ public class AuthController : ControllerBase
         [FromBody] RegisterWithInviteApiRequest request,
         CancellationToken ct)
     {
+        if (_securitySettingsRepository is not null)
+        {
+            var settings = await _securitySettingsRepository.GetAsync(ct);
+            if (settings.MaintenanceMode)
+            {
+                var detail = !string.IsNullOrWhiteSpace(settings.Message) ? $" Motivo: {settings.Message}" : string.Empty;
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+                {
+                    Status = StatusCodes.Status503ServiceUnavailable,
+                    Title = "Sistema em Modo de Manutenção",
+                    Type = "https://tournaments.local/errors/maintenance-mode",
+                    Detail = $"O cadastro de novas contas está temporariamente bloqueado enquanto o modo de manutenção estiver ativo.{detail}",
+                    Instance = HttpContext?.Request.Path
+                });
+            }
+        }
+
         var result = await _sender.Send(new RegisterWithInvitationCommand(
             request.Code,
             request.Password,

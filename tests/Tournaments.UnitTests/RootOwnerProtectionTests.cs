@@ -333,6 +333,7 @@ public class RootOwnerProtectionTests
     {
         var prodSecret = "ProdJwtSecretForRootOwnerHttpTest_Minimum32Chars!";
         var userRepo = new InMemoryUserRepository();
+        var inviteRepo = new InMemoryInvitationRepository();
         var securityRepo = new InMemorySystemSecuritySettingsRepository();
 
         var rootOwner = new User(RootEmail, "hash", "OwnerRoot", UserRole.SuperAdmin);
@@ -380,6 +381,7 @@ public class RootOwnerProtectionTests
         builder.Services.AddIdentityInfrastructure(builder.Configuration);
 
         builder.Services.AddScoped<IUserRepository>(_ => userRepo);
+        builder.Services.AddScoped<IInvitationRepository>(_ => inviteRepo);
         builder.Services.AddScoped<ISystemSecuritySettingsRepository>(_ => securityRepo);
         builder.Services.AddScoped<ITournamentRealtimeNotifier, NoOpNotifier>();
 
@@ -476,6 +478,62 @@ public class RootOwnerProtectionTests
                 Assert.True(rootDto!.MaintenanceMode);
                 Assert.Equal("OwnerRoot", rootDto.UpdatedBy);
                 Assert.NotNull(rootDto.UpdatedAtUtc);
+            }
+
+            // 6. Com MaintenanceMode ativo, criação de convite (POST /invitations) e cadastro (POST /auth/register-invite) ficam bloqueados (503)
+            using (var blockedInviteReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/invitations")
+            {
+                Content = JsonContent.Create(new { email = "novo@dota.local", targetRole = UserRole.User, validHours = 24 })
+            })
+            {
+                blockedInviteReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherSuperToken);
+                using var blockedInviteResp = await client.SendAsync(blockedInviteReq);
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, blockedInviteResp.StatusCode);
+            }
+
+            using (var blockedRegisterReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/register-invite")
+            {
+                Content = JsonContent.Create(new
+                {
+                    code = "any-code",
+                    email = "novo@dota.local",
+                    displayName = "NovoPlayer",
+                    password = "Password123!",
+                    steamId = 76561198044444444ul
+                })
+            })
+            {
+                using var blockedRegisterResp = await client.SendAsync(blockedRegisterReq);
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, blockedRegisterResp.StatusCode);
+            }
+
+            // 7. Ao desligar MaintenanceMode como Root Owner, criação de convite volta a funcionar (201 Created)
+            var unlockRequest = new UpdateSystemSecuritySettingsRequest(
+                LockResultSubmission: false,
+                LockTournamentRegistration: false,
+                LockTournamentCreation: false,
+                LockDraftPicks: false,
+                MaintenanceMode: false,
+                Message: null);
+
+            using (var unlockReq = new HttpRequestMessage(HttpMethod.Put, "/api/v1/admin/security-settings")
+            {
+                Content = JsonContent.Create(unlockRequest)
+            })
+            {
+                unlockReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", rootToken);
+                using var unlockResp = await client.SendAsync(unlockReq);
+                Assert.Equal(HttpStatusCode.OK, unlockResp.StatusCode);
+            }
+
+            using (var allowedInviteReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/invitations")
+            {
+                Content = JsonContent.Create(new { email = "liberado@dota.local", targetRole = UserRole.User, validHours = 24 })
+            })
+            {
+                allowedInviteReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", otherSuperToken);
+                using var allowedInviteResp = await client.SendAsync(allowedInviteReq);
+                Assert.Equal(HttpStatusCode.Created, allowedInviteResp.StatusCode);
             }
         }
         finally
