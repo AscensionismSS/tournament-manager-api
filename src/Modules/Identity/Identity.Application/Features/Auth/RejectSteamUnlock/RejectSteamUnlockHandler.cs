@@ -12,15 +12,18 @@ public class RejectSteamUnlockHandler : IRequestHandler<RejectSteamUnlockCommand
     private readonly IUserRepository _userRepository;
     private readonly IAccountRecoveryRepository _recoveryRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public RejectSteamUnlockHandler(
         IUserRepository userRepository,
         IAccountRecoveryRepository recoveryRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _recoveryRepository = recoveryRepository;
         _currentUserService = currentUserService;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<RecoveryActionResponseDto>> Handle(
@@ -55,6 +58,14 @@ public class RejectSteamUnlockHandler : IRequestHandler<RejectSteamUnlockCommand
         }
 
         var targetUser = await _userRepository.GetByIdAsync(token.UserId, cancellationToken);
+
+        bool isTargetRootOwner = _rootOwnerService?.IsRootOwner(targetUser) == true
+            || _rootOwnerService?.IsRootOwnerEmail(token.Email) == true;
+        if (isTargetRootOwner && adminUser.Id != token.UserId)
+        {
+            return Result.Failure<RecoveryActionResponseDto>(
+                "A solicitação de troca de Steam do proprietário raiz (AdminSeed) só pode ser gerenciada pelo próprio proprietário.");
+        }
 
         token.Reject(DateTime.UtcNow);
         await _recoveryRepository.UpdateAsync(token, cancellationToken);

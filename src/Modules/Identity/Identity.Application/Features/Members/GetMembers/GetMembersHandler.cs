@@ -11,13 +11,16 @@ public class GetMembersHandler : IRequestHandler<GetMembersQuery, Result<IReadOn
 {
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService? _currentUserService;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public GetMembersHandler(
         IUserRepository userRepository,
-        ICurrentUserService? currentUserService = null)
+        ICurrentUserService? currentUserService = null,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<IReadOnlyList<MemberDto>>> Handle(
@@ -66,7 +69,13 @@ public class GetMembersHandler : IRequestHandler<GetMembersQuery, Result<IReadOn
         var ordered = query
             .OrderByDescending(u => u.DotaRankTier ?? 0)
             .ThenBy(u => u.DisplayName)
-            .Select(u => u.ToMemberDto(includeSensitiveData: isAdminCaller || (callerUserId.HasValue && callerUserId.Value == u.Id)))
+            .Select(u =>
+            {
+                bool isSelf = callerUserId.HasValue && callerUserId.Value == u.Id;
+                return u.ToMemberDto(
+                    includeSensitiveData: isAdminCaller || isSelf,
+                    isRootOwner: (isAdminCaller || isSelf) && _rootOwnerService?.IsRootOwner(u) == true);
+            })
             .ToList();
 
         return Result.Success<IReadOnlyList<MemberDto>>(ordered);

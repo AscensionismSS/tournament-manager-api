@@ -1,5 +1,6 @@
 using BuildingBlocks.Domain;
 using Identity.Application.Common.Interfaces;
+using Identity.Application.Common.Security;
 using Identity.Contracts.Invitations;
 using Identity.Domain.Repositories;
 using MediatR;
@@ -46,7 +47,7 @@ public class RevokeInvitationHandler : IRequestHandler<RevokeInvitationCommand, 
         return Result.Success(new InvitationDto(
             invitation.Id,
             invitation.Code,
-            invitation.Email,
+            EmailMasker.Mask(invitation.Email),
             invitation.TargetRole.ToString(),
             invitation.CreatedByUserId,
             invitation.CreatedAtUtc,

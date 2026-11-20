@@ -580,7 +580,7 @@ public class SecurityHardeningAuditTests
         Assert.Null(bannedDtoForUser.StatusReason);         // Motivo administrativo omitido!
 
         var selfDtoForUser = listAsUser.Value.Single(m => m.UserId == callerPlayer.Id);
-        Assert.Equal("caller@dota.local", selfDtoForUser.Email); // Próprio usuário vê seu e-mail!
+        Assert.Equal("ca***@d***.local", selfDtoForUser.Email); // Mesmo próprio usuário na listagem pública usa máscara fixa
 
         // 2. Jogador comum busca outro membro por ID vs si mesmo
         var getByIdAsUser = new GetMemberByIdHandler(repo, regularUserContext);
@@ -589,15 +589,15 @@ public class SecurityHardeningAuditTests
         Assert.Null(otherById.Value.StatusReason);
 
         var selfById = await getByIdAsUser.Handle(new GetMemberByIdQuery(callerPlayer.Id), CancellationToken.None);
-        Assert.Equal("caller@dota.local", selfById.Value.Email);
+        Assert.Equal("ca***@d***.local", selfById.Value.Email);
 
-        // 3. TournamentAdmin vê Email e StatusReason de todos os membros
+        // 3. TournamentAdmin vê StatusReason completo e Email estritamente mascarado
         var adminContext = new StubCurrentUserService(Guid.NewGuid(), "ref@dota.local", "TournamentAdmin");
         var getMembersAsAdmin = new GetMembersHandler(repo, adminContext);
         var listAsAdmin = await getMembersAsAdmin.Handle(new GetMembersQuery(), CancellationToken.None);
 
         var bannedDtoForAdmin = listAsAdmin.Value.Single(m => m.UserId == bannedPlayer.Id);
-        Assert.Equal("banned@secret-email.com", bannedDtoForAdmin.Email);
+        Assert.Equal("ba***@s***.com", bannedDtoForAdmin.Email);
         Assert.Equal("Suspenso por toxicidade em lobby", bannedDtoForAdmin.StatusReason);
     }
 
@@ -792,11 +792,11 @@ public class SecurityHardeningAuditTests
                 Assert.Equal(HttpStatusCode.OK, legitCorsResp.StatusCode);
                 Assert.Equal("https://tsurus-cup.pages.dev", legitCorsResp.Headers.GetValues("Access-Control-Allow-Origin").Single());
 
-                // PII: Jogador comum NÃO vê e-mail do SuperAdmin, mas vê o seu próprio
+                // PII: Jogador comum NÃO vê e-mail do SuperAdmin, e o seu próprio vem com máscara fixa na tabela de membros
                 var members = await legitCorsResp.Content.ReadFromJsonAsync<List<MemberDto>>();
                 Assert.NotNull(members);
                 Assert.Equal(string.Empty, members!.Single(m => m.UserId == superAdmin.Id).Email);
-                Assert.Equal("playera@private.mail", members.Single(m => m.UserId == playerA.Id).Email);
+                Assert.Equal("pl***@p***.mail", members.Single(m => m.UserId == playerA.Id).Email);
             }
 
             // B) Torneio ainda em Rascunho (Draft) -> jogador comum tentando POST sem body deve ser bloqueado pela regra de inscrições fechadas (não 400 de model binder!)

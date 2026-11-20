@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Identity.Application;
 using Identity.Application.Common.Interfaces;
 using Identity.Infrastructure;
+using Identity.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -266,10 +267,14 @@ if (initializeDbOnStartup)
             app.Logger.LogWarning("Falha ao sincronizar colunas em Tournaments/MatchSeries: {Message}", ex.Message);
         }
 
-        // Seed Master SuperAdmin se a tabela estiver vazia
+        var configuredAdminEmail = app.Configuration["AdminSeed:Email"];
+        var adminEmail = string.IsNullOrWhiteSpace(configuredAdminEmail)
+            ? RootOwnerOptions.DefaultEmail
+            : configuredAdminEmail.Trim().ToLowerInvariant();
+
+        // Seed Master SuperAdmin se a tabela estiver vazia; caso contrário, garante a integridade do proprietário raiz
         if (!identityDbContext.Users.Any())
         {
-            var adminEmail = app.Configuration["AdminSeed:Email"] ?? "admin@tournament.local";
             var configuredAdminPassword = app.Configuration["AdminSeed:Password"];
             ProductionSecurityValidator.ValidateAdminSeedPassword(configuredAdminPassword, app.Environment.IsDevelopment());
 
@@ -286,6 +291,17 @@ if (initializeDbOnStartup)
             identityDbContext.Users.Add(defaultAdmin);
             identityDbContext.SaveChanges();
             app.Logger.LogInformation("SuperAdmin padrão criado com sucesso: {Email}", adminEmail);
+        }
+        else
+        {
+            var rootOwnerUser = identityDbContext.Users
+                .FirstOrDefault(u => u.Email.ToLower() == adminEmail);
+
+            if (rootOwnerUser is not null && rootOwnerUser.EnsureRootOwnerIntegrity())
+            {
+                identityDbContext.SaveChanges();
+                app.Logger.LogWarning("Integridade do proprietário raiz ({Email}) restaurada automaticamente para Ativo e SuperAdmin.", adminEmail);
+            }
         }
     }
     catch (InvalidOperationException)

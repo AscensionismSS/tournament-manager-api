@@ -11,15 +11,18 @@ public class LoginHandler : IRequestHandler<LoginCommand, Result<AuthResponseDto
     private readonly IUserRepository _userRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public LoginHandler(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
-        IJwtTokenGenerator jwtTokenGenerator)
+        IJwtTokenGenerator jwtTokenGenerator,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<AuthResponseDto>> Handle(LoginCommand request, CancellationToken cancellationToken)
@@ -49,6 +52,9 @@ public class LoginHandler : IRequestHandler<LoginCommand, Result<AuthResponseDto
 
         var (token, expiresAtUtc) = _jwtTokenGenerator.GenerateToken(user);
 
-        return Result.Success(user.ToAuthResponseDto(token, expiresAtUtc));
+        return Result.Success(user.ToAuthResponseDto(
+            token,
+            expiresAtUtc,
+            isRootOwner: _rootOwnerService?.HasRootOwnerAuthority(user) == true));
     }
 }

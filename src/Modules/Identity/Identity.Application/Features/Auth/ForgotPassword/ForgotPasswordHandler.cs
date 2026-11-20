@@ -1,4 +1,5 @@
 using BuildingBlocks.Domain;
+using Identity.Application.Common.Interfaces;
 using Identity.Contracts.Auth;
 using Identity.Domain.Entities;
 using Identity.Domain.Enums;
@@ -14,13 +15,16 @@ public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, Resu
 
     private readonly IUserRepository _userRepository;
     private readonly IAccountRecoveryRepository _recoveryRepository;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public ForgotPasswordHandler(
         IUserRepository userRepository,
-        IAccountRecoveryRepository recoveryRepository)
+        IAccountRecoveryRepository recoveryRepository,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _recoveryRepository = recoveryRepository;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<RecoveryActionResponseDto>> Handle(
@@ -35,9 +39,9 @@ public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, Resu
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        // Prevenção de Enumeração de Contas (OWASP):
-        // Se o usuário não existir, não informa o erro ao requisitante. Retorna mensagem genérica de sucesso.
-        if (user is null)
+        // Prevenção de Enumeração de Contas (OWASP) + Blindagem do Root Owner:
+        // Se o usuário não existir ou for a conta AdminSeed, não gera token exposível no painel administrativo.
+        if (user is null || _rootOwnerService?.IsRootOwner(user) == true)
         {
             return Result.Success(new RecoveryActionResponseDto(GenericSuccessMessage));
         }

@@ -192,6 +192,28 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
 
+        var fallbackRootOwnerOptions = new RootOwnerOptions();
+        configuration?.GetSection(RootOwnerOptions.SectionName).Bind(fallbackRootOwnerOptions);
+        if (string.IsNullOrWhiteSpace(fallbackRootOwnerOptions.Email))
+        {
+            fallbackRootOwnerOptions.Email = RootOwnerOptions.DefaultEmail;
+        }
+
+        services.AddOptions<RootOwnerOptions>()
+            .Configure<IServiceProvider>((opt, sp) =>
+            {
+                opt.Email = fallbackRootOwnerOptions.Email;
+
+                var resolvedConfig = sp.GetService<IConfiguration>() ?? configuration;
+                resolvedConfig?.GetSection(RootOwnerOptions.SectionName).Bind(opt);
+                if (string.IsNullOrWhiteSpace(opt.Email))
+                {
+                    opt.Email = RootOwnerOptions.DefaultEmail;
+                }
+            });
+
+        services.AddSingleton<IRootOwnerService, RootOwnerService>();
+
         services.AddHttpClient<IOpenDotaProfileService, OpenDotaProfileService>(client =>
         {
             client.Timeout = TimeSpan.FromSeconds(10);

@@ -11,15 +11,18 @@ public class LinkSteamHandler : IRequestHandler<LinkSteamCommand, Result<UserDto
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IOpenDotaProfileService _openDotaProfileService;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public LinkSteamHandler(
         IUserRepository userRepository,
         ICurrentUserService currentUserService,
-        IOpenDotaProfileService openDotaProfileService)
+        IOpenDotaProfileService openDotaProfileService,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
         _openDotaProfileService = openDotaProfileService;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<UserDto>> Handle(LinkSteamCommand request, CancellationToken cancellationToken)
@@ -59,6 +62,6 @@ public class LinkSteamHandler : IRequestHandler<LinkSteamCommand, Result<UserDto
 
         await _userRepository.UpdateAsync(user, cancellationToken);
 
-        return Result.Success(user.ToDto());
+        return Result.Success(user.ToDto(isRootOwner: _rootOwnerService?.HasRootOwnerAuthority(user) == true));
     }
 }

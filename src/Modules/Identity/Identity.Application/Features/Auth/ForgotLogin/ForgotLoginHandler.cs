@@ -1,4 +1,5 @@
 using BuildingBlocks.Domain;
+using Identity.Application.Common.Interfaces;
 using Identity.Contracts.Auth;
 using Identity.Domain.Entities;
 using Identity.Domain.Enums;
@@ -14,13 +15,16 @@ public class ForgotLoginHandler : IRequestHandler<ForgotLoginCommand, Result<Rec
 
     private readonly IUserRepository _userRepository;
     private readonly IAccountRecoveryRepository _recoveryRepository;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public ForgotLoginHandler(
         IUserRepository userRepository,
-        IAccountRecoveryRepository recoveryRepository)
+        IAccountRecoveryRepository recoveryRepository,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _recoveryRepository = recoveryRepository;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<RecoveryActionResponseDto>> Handle(
@@ -35,8 +39,8 @@ public class ForgotLoginHandler : IRequestHandler<ForgotLoginCommand, Result<Rec
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
         var user = await _userRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
 
-        // Prevenção de Enumeração de Contas (OWASP)
-        if (user is null)
+        // Prevenção de Enumeração de Contas (OWASP) + Blindagem do Root Owner
+        if (user is null || _rootOwnerService?.IsRootOwner(user) == true)
         {
             return Result.Success(new RecoveryActionResponseDto(GenericSuccessMessage));
         }

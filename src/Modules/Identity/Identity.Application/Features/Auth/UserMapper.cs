@@ -1,3 +1,4 @@
+using Identity.Application.Common.Security;
 using Identity.Contracts.Auth;
 using Identity.Contracts.Preferences;
 using Identity.Domain.Entities;
@@ -6,11 +7,11 @@ namespace Identity.Application.Features.Auth;
 
 public static class UserMapper
 {
-    public static UserDto ToDto(this User user)
+    public static UserDto ToDto(this User user, bool isRootOwner = false, bool maskEmail = false)
     {
         return new UserDto(
             user.Id,
-            user.Email,
+            maskEmail ? EmailMasker.Mask(user.Email) : user.Email,
             user.DisplayName,
             user.Role.ToString(),
             user.SteamId,
@@ -24,11 +25,12 @@ public static class UserMapper
             user.Roles.Select(r => r.ToString()).ToList(),
             user.PreferredRole?.ToString(),
             user.SteamId.HasValue ? $"https://steamcommunity.com/profiles/{user.SteamId.Value}" : null,
-            new GeneralPreferencesDto(user.Preferences?.PreferredLandingPage ?? "Player")
+            new GeneralPreferencesDto(user.Preferences?.PreferredLandingPage ?? "Player"),
+            isRootOwner
         );
     }
 
-    public static AuthResponseDto ToAuthResponseDto(this User user, string token, DateTime expiresAtUtc)
+    public static AuthResponseDto ToAuthResponseDto(this User user, string token, DateTime expiresAtUtc, bool isRootOwner = false)
     {
         return new AuthResponseDto(
             user.Id,
@@ -46,7 +48,8 @@ public static class UserMapper
             user.Roles.Select(r => r.ToString()).ToList(),
             user.PreferredRole?.ToString(),
             user.SteamId.HasValue ? $"https://steamcommunity.com/profiles/{user.SteamId.Value}" : null,
-            new GeneralPreferencesDto(user.Preferences?.PreferredLandingPage ?? "Player")
+            new GeneralPreferencesDto(user.Preferences?.PreferredLandingPage ?? "Player"),
+            isRootOwner
         );
     }
 }

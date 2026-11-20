@@ -18,7 +18,8 @@ public record AuthResponseDto(
     IReadOnlyList<string>? Roles = null,
     string? PreferredRole = null,
     string? SteamProfileUrl = null,
-    GeneralPreferencesDto? GeneralPreferences = null
+    GeneralPreferencesDto? GeneralPreferences = null,
+    bool IsRootOwner = false
 )
 {
     public bool IsSteamLinked => SteamId.HasValue && SteamId.Value > 0;
@@ -41,7 +42,8 @@ public record UserDto(
     IReadOnlyList<string>? Roles = null,
     string? PreferredRole = null,
     string? SteamProfileUrl = null,
-    GeneralPreferencesDto? GeneralPreferences = null
+    GeneralPreferencesDto? GeneralPreferences = null,
+    bool IsRootOwner = false
 )
 {
     public bool IsSteamLinked => SteamId.HasValue && SteamId.Value > 0;

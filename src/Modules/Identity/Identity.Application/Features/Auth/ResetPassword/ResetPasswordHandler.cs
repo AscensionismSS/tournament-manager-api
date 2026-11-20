@@ -12,15 +12,18 @@ public class ResetPasswordHandler : IRequestHandler<ResetPasswordCommand, Result
     private readonly IUserRepository _userRepository;
     private readonly IAccountRecoveryRepository _recoveryRepository;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public ResetPasswordHandler(
         IUserRepository userRepository,
         IAccountRecoveryRepository recoveryRepository,
-        IPasswordHasher passwordHasher)
+        IPasswordHasher passwordHasher,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _recoveryRepository = recoveryRepository;
         _passwordHasher = passwordHasher;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<RecoveryActionResponseDto>> Handle(
@@ -49,9 +52,12 @@ public class ResetPasswordHandler : IRequestHandler<ResetPasswordCommand, Result
         }
 
         var user = await _userRepository.GetByIdAsync(recoveryToken.UserId, cancellationToken);
-        if (user is null)
+        if (user is null || _rootOwnerService?.IsRootOwner(user) == true)
         {
-            return Result.Failure<RecoveryActionResponseDto>("Usuário associado ao token não foi encontrado.");
+            return Result.Failure<RecoveryActionResponseDto>(
+                user is null
+                    ? "Usuário associado ao token não foi encontrado."
+                    : "Link de redefinição de senha inválido ou expirado.");
         }
 
         // Atualiza a senha com hash seguro PBKDF2

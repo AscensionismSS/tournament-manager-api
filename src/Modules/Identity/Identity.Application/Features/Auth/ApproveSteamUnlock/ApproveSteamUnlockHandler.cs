@@ -13,17 +13,20 @@ public class ApproveSteamUnlockHandler : IRequestHandler<ApproveSteamUnlockComma
     private readonly IAccountRecoveryRepository _recoveryRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IUserRealtimeNotifier? _userRealtimeNotifier;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public ApproveSteamUnlockHandler(
         IUserRepository userRepository,
         IAccountRecoveryRepository recoveryRepository,
         ICurrentUserService currentUserService,
-        IUserRealtimeNotifier? userRealtimeNotifier = null)
+        IUserRealtimeNotifier? userRealtimeNotifier = null,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _recoveryRepository = recoveryRepository;
         _currentUserService = currentUserService;
         _userRealtimeNotifier = userRealtimeNotifier;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<RecoveryActionResponseDto>> Handle(
@@ -63,11 +66,20 @@ public class ApproveSteamUnlockHandler : IRequestHandler<ApproveSteamUnlockComma
             return Result.Failure<RecoveryActionResponseDto>("O usuário solicitante não foi encontrado no sistema.");
         }
 
+        bool isTargetRootOwner = _rootOwnerService?.IsRootOwner(targetUser) == true;
+        if (isTargetRootOwner && adminUser.Id != targetUser.Id)
+        {
+            return Result.Failure<RecoveryActionResponseDto>(
+                "A solicitação de troca de Steam do proprietário raiz (AdminSeed) só pode ser aprovada pelo próprio proprietário.");
+        }
+
         // Se for SuperAdmin, chama o método de domínio UnlockSteam
         // Para atender com segurança a invariante do User.cs:
         try
         {
-            targetUser.UnlockSteam(adminUser.Role == UserRole.SuperAdmin ? adminUser : new Domain.Entities.User("system@dota.local", "hash", "System Admin", UserRole.SuperAdmin));
+            targetUser.UnlockSteam(
+                adminUser.Role == UserRole.SuperAdmin ? adminUser : new Domain.Entities.User("system@dota.local", "hash", "System Admin", UserRole.SuperAdmin),
+                isTargetRootOwner);
         }
         catch (DomainException ex)
         {
@@ -81,7 +93,10 @@ public class ApproveSteamUnlockHandler : IRequestHandler<ApproveSteamUnlockComma
 
         if (_userRealtimeNotifier is not null)
         {
-            await _userRealtimeNotifier.NotifySteamUnlockedAsync(targetUser.Id, targetUser.ToDto(), cancellationToken);
+            await _userRealtimeNotifier.NotifySteamUnlockedAsync(
+                targetUser.Id,
+                targetUser.ToDto(isRootOwner: _rootOwnerService?.HasRootOwnerAuthority(targetUser) == true),
+                cancellationToken);
         }
 
         return Result.Success(new RecoveryActionResponseDto(

@@ -11,15 +11,18 @@ public class UnlockSteamHandler : IRequestHandler<UnlockSteamCommand, Result<Use
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IUserRealtimeNotifier? _userRealtimeNotifier;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public UnlockSteamHandler(
         IUserRepository userRepository,
         ICurrentUserService currentUserService,
-        IUserRealtimeNotifier? userRealtimeNotifier = null)
+        IUserRealtimeNotifier? userRealtimeNotifier = null,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
         _userRealtimeNotifier = userRealtimeNotifier;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<UserDto>> Handle(UnlockSteamCommand request, CancellationToken cancellationToken)
@@ -41,10 +44,22 @@ public class UnlockSteamHandler : IRequestHandler<UnlockSteamCommand, Result<Use
             return Result.Failure<UserDto>("Usuário alvo não encontrado.");
         }
 
-        targetUser.UnlockSteam(adminUser);
+        bool isTargetRootOwner = _rootOwnerService?.IsRootOwner(targetUser) == true;
+
+        try
+        {
+            targetUser.UnlockSteam(adminUser, isTargetRootOwner);
+        }
+        catch (DomainException ex)
+        {
+            return Result.Failure<UserDto>(ex.Message);
+        }
+
         await _userRepository.UpdateAsync(targetUser, cancellationToken);
 
-        var dto = targetUser.ToDto();
+        var dto = targetUser.ToDto(
+            isRootOwner: _rootOwnerService?.HasRootOwnerAuthority(targetUser) == true,
+            maskEmail: adminUser.Id != targetUser.Id);
 
         if (_userRealtimeNotifier is not null)
         {

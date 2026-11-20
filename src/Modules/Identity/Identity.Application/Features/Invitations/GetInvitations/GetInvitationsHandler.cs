@@ -1,3 +1,4 @@
+using Identity.Application.Common.Security;
 using Identity.Contracts.Invitations;
 using Identity.Domain.Repositories;
 using MediatR;
@@ -20,7 +21,7 @@ public class GetInvitationsHandler : IRequestHandler<GetInvitationsQuery, IReadO
         return invitations.Select(i => new InvitationDto(
             i.Id,
             i.Code,
-            i.Email,
+            EmailMasker.Mask(i.Email),
             i.TargetRole.ToString(),
             i.CreatedByUserId,
             i.CreatedAtUtc,

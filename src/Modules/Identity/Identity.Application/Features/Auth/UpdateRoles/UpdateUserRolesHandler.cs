@@ -10,13 +10,16 @@ public class UpdateUserRolesHandler : IRequestHandler<UpdateUserRolesCommand, Re
 {
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public UpdateUserRolesHandler(
         IUserRepository userRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<UserDto>> Handle(UpdateUserRolesCommand request, CancellationToken cancellationToken)
@@ -43,6 +46,6 @@ public class UpdateUserRolesHandler : IRequestHandler<UpdateUserRolesCommand, Re
 
         await _userRepository.UpdateAsync(user, cancellationToken);
 
-        return Result.Success(user.ToDto());
+        return Result.Success(user.ToDto(isRootOwner: _rootOwnerService?.HasRootOwnerAuthority(user) == true));
     }
 }

@@ -40,3 +40,11 @@ public interface IUserAuthStateCache
 
     void Invalidate(Guid userId);
 }
+
+public interface IRootOwnerService
+{
+    string RootOwnerEmail { get; }
+    bool IsRootOwnerEmail(string? email);
+    bool IsRootOwner(User? user);
+    bool HasRootOwnerAuthority(User? user);
+}

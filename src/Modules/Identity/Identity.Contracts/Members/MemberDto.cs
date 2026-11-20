@@ -21,5 +21,6 @@ public record MemberDto(
     bool IsSteamLocked,
     bool IsActive = true,
     string? StatusReason = null,
-    bool IsTournamentEligible = true
+    bool IsTournamentEligible = true,
+    bool IsRootOwner = false
 );

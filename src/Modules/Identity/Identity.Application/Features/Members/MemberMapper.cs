@@ -1,3 +1,4 @@
+using Identity.Application.Common.Security;
 using Identity.Contracts.Members;
 using Identity.Domain.Entities;
 
@@ -7,7 +8,7 @@ public static class MemberMapper
 {
     private const ulong SteamIdOffset = 76561197960265728UL;
 
-    public static MemberDto ToMemberDto(this User user, bool includeSensitiveData = true)
+    public static MemberDto ToMemberDto(this User user, bool includeSensitiveData = true, bool isRootOwner = false, bool maskEmail = true)
     {
         string? dotaFriendId = null;
         string? steamIdStr = null;
@@ -33,7 +34,9 @@ public static class MemberMapper
 
         return new MemberDto(
             UserId: user.Id,
-            Email: includeSensitiveData ? user.Email : string.Empty,
+            Email: includeSensitiveData
+                ? (maskEmail ? EmailMasker.Mask(user.Email) : user.Email)
+                : string.Empty,
             DisplayName: user.DisplayName,
             PersonaName: user.DotaPersonaName,
             AvatarUrl: user.DotaAvatarUrl,
@@ -48,7 +51,8 @@ public static class MemberMapper
             IsSteamLocked: user.IsSteamLocked,
             IsActive: user.IsActive,
             StatusReason: includeSensitiveData ? user.StatusReason : null,
-            IsTournamentEligible: user.IsTournamentEligible
+            IsTournamentEligible: user.IsTournamentEligible,
+            IsRootOwner: isRootOwner
         );
     }
 }

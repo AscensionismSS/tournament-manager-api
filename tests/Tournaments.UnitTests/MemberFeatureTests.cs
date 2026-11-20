@@ -19,7 +19,7 @@ public class MemberFeatureTests
 
         var dto = user.ToMemberDto();
 
-        Assert.Equal("miracle@dota.local", dto.Email);
+        Assert.Equal("mi***@d***.local", dto.Email);
         Assert.Equal("Amer Al-Barkawi", dto.DisplayName);
         Assert.Equal("Miracle-", dto.PersonaName);
         Assert.Equal("https://avatar.url/miracle.jpg", dto.AvatarUrl);

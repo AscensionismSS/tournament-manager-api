@@ -7,6 +7,8 @@ using Identity.Application.Features.Invitations.RevokeInvitation;
 using Identity.Contracts.Auth;
 using Identity.Contracts.Invitations;
 using Identity.Domain.Enums;
+using Identity.Infrastructure.Repositories;
+using Identity.Infrastructure.Security;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -427,7 +429,9 @@ public class EndpointControllerTests
     [Fact]
     public async Task AdminSecuritySettingsController_GetSecuritySettings_ShouldReturn200Ok_WithCurrentSettings()
     {
-        var controller = new AdminSecuritySettingsController(_sender);
+        var userRepo = new InMemoryUserRepository();
+        var rootOwnerService = new RootOwnerService("admin@tournament.local");
+        var controller = new AdminSecuritySettingsController(_sender, userRepo, rootOwnerService);
 
         var actionResult = await controller.GetSecuritySettings(CancellationToken.None);
 
@@ -436,15 +440,22 @@ public class EndpointControllerTests
         var dto = Assert.IsType<Tournaments.Contracts.Security.SystemSecuritySettingsDto>(okResult.Value);
         Assert.False(dto.MaintenanceMode);
         Assert.False(dto.LockResultSubmission);
+        Assert.Null(dto.UpdatedBy);
+        Assert.Null(dto.UpdatedAtUtc);
     }
 
     [Fact]
-    public async Task AdminSecuritySettingsController_UpdateSecuritySettings_ShouldReturn200Ok_WithUpdatedSettings()
+    public async Task AdminSecuritySettingsController_UpdateSecuritySettings_ShouldReturn200Ok_WhenRootOwner()
     {
-        var controller = new AdminSecuritySettingsController(_sender);
+        var userRepo = new InMemoryUserRepository();
+        var rootOwner = new Identity.Domain.Entities.User("admin@tournament.local", "hash", "Master Root", UserRole.SuperAdmin);
+        await userRepo.AddAsync(rootOwner);
+
+        var rootOwnerService = new RootOwnerService("admin@tournament.local");
+        var controller = new AdminSecuritySettingsController(_sender, userRepo, rootOwnerService);
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, "superadmin-123"),
+            new Claim(ClaimTypes.NameIdentifier, rootOwner.Id.ToString()),
             new Claim(ClaimTypes.Role, "SuperAdmin")
         }, "TestAuth"));
         controller.ControllerContext = new ControllerContext
@@ -470,7 +481,45 @@ public class EndpointControllerTests
         Assert.True(dto.LockTournamentRegistration);
         Assert.False(dto.LockTournamentCreation);
         Assert.Equal("Travamento geral acionado", dto.Message);
-        Assert.Equal("superadmin-123", dto.UpdatedBy);
+        Assert.Equal("Master Root", dto.UpdatedBy);
+    }
+
+    [Fact]
+    public async Task AdminSecuritySettingsController_UpdateSecuritySettings_ShouldReturn403Forbidden_WhenOtherSuperAdmin()
+    {
+        var userRepo = new InMemoryUserRepository();
+        var rootOwner = new Identity.Domain.Entities.User("admin@tournament.local", "hash", "Master Root", UserRole.SuperAdmin);
+        var otherSuperAdmin = new Identity.Domain.Entities.User("co-admin@tournament.local", "hash", "CoAdmin", UserRole.SuperAdmin);
+        await userRepo.AddAsync(rootOwner);
+        await userRepo.AddAsync(otherSuperAdmin);
+
+        var rootOwnerService = new RootOwnerService("admin@tournament.local");
+        var controller = new AdminSecuritySettingsController(_sender, userRepo, rootOwnerService);
+        var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, otherSuperAdmin.Id.ToString()),
+            new Claim(ClaimTypes.Role, "SuperAdmin")
+        }, "TestAuth"));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = user }
+        };
+
+        var request = new Tournaments.Contracts.Security.UpdateSystemSecuritySettingsRequest(
+            LockResultSubmission: true,
+            LockTournamentRegistration: false,
+            LockTournamentCreation: false,
+            LockDraftPicks: false,
+            MaintenanceMode: true,
+            Message: "Tentativa não autorizada"
+        );
+
+        var actionResult = await controller.UpdateSecuritySettings(request, CancellationToken.None);
+
+        var forbiddenResult = Assert.IsType<ObjectResult>(actionResult.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, forbiddenResult.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(forbiddenResult.Value);
+        Assert.Equal("Acesso Restrito ao Proprietário Raiz", problem.Title);
     }
 
     private sealed class DummyFileStorageService : IFileStorageService

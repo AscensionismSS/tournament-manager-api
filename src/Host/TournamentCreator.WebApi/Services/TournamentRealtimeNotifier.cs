@@ -98,6 +98,7 @@ public class TournamentRealtimeNotifier : ITournamentRealtimeNotifier
             null,
             DateTime.UtcNow));
 
-        await _hubContext.Clients.All.SendAsync("ReceiveSecuritySettingsChanged", settings, cancellationToken: ct);
+        var publicSettings = settings with { UpdatedBy = null, UpdatedAtUtc = null };
+        await _hubContext.Clients.All.SendAsync("ReceiveSecuritySettingsChanged", publicSettings, cancellationToken: ct);
     }
 }

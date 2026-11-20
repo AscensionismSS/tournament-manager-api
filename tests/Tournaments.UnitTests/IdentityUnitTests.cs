@@ -342,8 +342,8 @@ public class IdentityUnitTests
         var result = await handler.Handle(new Identity.Application.Features.Invitations.GetInvitations.GetInvitationsQuery(), CancellationToken.None);
 
         Assert.Equal(2, result.Count);
-        Assert.Contains(result, i => i.Email == "player1@dota.local" && !i.IsUsed);
-        Assert.Contains(result, i => i.Email == "player2@dota.local" && i.IsUsed);
+        Assert.Contains(result, i => i.Email == "pl***@d***.local" && !i.IsUsed);
+        Assert.Contains(result, i => i.Email == "pl***@d***.local" && i.IsUsed);
         Assert.All(result, i => Assert.Equal(32, i.Code.Length)); // Código criptográfico de 32 chars
     }
 
@@ -581,7 +581,10 @@ public class IdentityUnitTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(hours, result.Value.ValidHours);
-        Assert.Equal("player@dota.local", result.Value.Email);
+        Assert.Equal("pl***@d***.local", result.Value.Email);
+        var savedInvite = await inviteRepo.GetByCodeAsync(result.Value.Code);
+        Assert.NotNull(savedInvite);
+        Assert.Equal("player@dota.local", savedInvite!.Email);
     }
 
     [Fact]

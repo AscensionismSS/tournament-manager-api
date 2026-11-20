@@ -90,10 +90,13 @@ public class User : AggregateRoot<Guid>
         LastDotaSyncAtUtc = DateTime.UtcNow;
     }
 
-    public void UnlockSteam(User adminUser)
+    public void UnlockSteam(User adminUser, bool isTargetRootOwner = false)
     {
         if (adminUser.Role != UserRole.SuperAdmin)
             throw new DomainException("Apenas o SuperAdmin pode desbloquear a vinculação da Steam.");
+
+        if (isTargetRootOwner && adminUser.Id != Id)
+            throw new DomainException("A conta Steam do proprietário raiz (AdminSeed) só pode ser desbloqueada pelo próprio proprietário.");
 
         IsSteamLocked = false;
         SteamId = null;
@@ -136,10 +139,13 @@ public class User : AggregateRoot<Guid>
         DisplayName = newDisplayName.Trim();
     }
 
-    public void PromoteRole(UserRole newRole, User adminUser)
+    public void PromoteRole(UserRole newRole, User adminUser, bool isTargetRootOwner = false)
     {
         if (adminUser.Role != UserRole.SuperAdmin)
             throw new DomainException("Apenas o SuperAdmin pode alterar o nível de acesso de um usuário.");
+
+        if (isTargetRootOwner && newRole != UserRole.SuperAdmin)
+            throw new DomainException("O nível de acesso do proprietário raiz (AdminSeed) não pode ser alterado.");
 
         Role = newRole;
     }
@@ -191,10 +197,13 @@ public class User : AggregateRoot<Guid>
         Preferences = new UserPreferences(preferredLandingPage);
     }
 
-    public void SetActive(bool isActive, string? reason, User requestingUser)
+    public void SetActive(bool isActive, string? reason, User requestingUser, bool isTargetRootOwner = false)
     {
         if (requestingUser.Role != UserRole.SuperAdmin && requestingUser.Role != UserRole.TournamentAdmin)
             throw new DomainException("Apenas administradores podem alterar o status de ativação do membro.");
+
+        if (isTargetRootOwner && !isActive)
+            throw new DomainException("A conta do proprietário raiz (AdminSeed) é protegida e não pode ser desativada.");
 
         if (requestingUser.Id == Id && !isActive)
             throw new DomainException("Você não pode desativar sua própria conta de administrador.");
@@ -206,13 +215,35 @@ public class User : AggregateRoot<Guid>
         StatusReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
     }
 
-    public void SetTournamentEligibility(bool isEligible, string? reason, User requestingUser)
+    public void SetTournamentEligibility(bool isEligible, string? reason, User requestingUser, bool isTargetRootOwner = false)
     {
         if (requestingUser.Role != UserRole.SuperAdmin && requestingUser.Role != UserRole.TournamentAdmin)
             throw new DomainException("Apenas administradores podem alterar a permissão de torneios do membro.");
 
+        if (isTargetRootOwner && !isEligible && requestingUser.Id != Id)
+            throw new DomainException("A elegibilidade do proprietário raiz (AdminSeed) não pode ser restringida por outros administradores.");
+
         IsTournamentEligible = isEligible;
         StatusReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+    }
+
+    public bool EnsureRootOwnerIntegrity()
+    {
+        bool changed = false;
+        if (Role != UserRole.SuperAdmin)
+        {
+            Role = UserRole.SuperAdmin;
+            changed = true;
+        }
+
+        if (!IsActive)
+        {
+            IsActive = true;
+            StatusReason = null;
+            changed = true;
+        }
+
+        return changed;
     }
 }
 

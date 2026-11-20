@@ -11,15 +11,18 @@ public class UpdateMemberStatusHandler : IRequestHandler<UpdateMemberStatusComma
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
     private readonly IUserAuthStateCache? _authStateCache;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public UpdateMemberStatusHandler(
         IUserRepository userRepository,
         ICurrentUserService currentUserService,
-        IUserAuthStateCache? authStateCache = null)
+        IUserAuthStateCache? authStateCache = null,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
         _authStateCache = authStateCache;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<MemberDto>> Handle(UpdateMemberStatusCommand request, CancellationToken cancellationToken)
@@ -48,11 +51,12 @@ public class UpdateMemberStatusHandler : IRequestHandler<UpdateMemberStatusComma
 
         try
         {
-            targetUser.SetActive(request.IsActive, request.Reason, adminUser);
+            bool isTargetRootOwner = _rootOwnerService?.IsRootOwner(targetUser) == true;
+            targetUser.SetActive(request.IsActive, request.Reason, adminUser, isTargetRootOwner);
             await _userRepository.UpdateAsync(targetUser, cancellationToken);
             _authStateCache?.Invalidate(targetUser.Id);
 
-            return Result.Success(targetUser.ToMemberDto());
+            return Result.Success(targetUser.ToMemberDto(includeSensitiveData: true, isRootOwner: isTargetRootOwner));
         }
         catch (DomainException ex)
         {

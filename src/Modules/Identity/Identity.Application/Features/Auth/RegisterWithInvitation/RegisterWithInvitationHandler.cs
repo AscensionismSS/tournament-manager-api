@@ -14,19 +14,22 @@ public class RegisterWithInvitationHandler : IRequestHandler<RegisterWithInvitat
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IOpenDotaProfileService _openDotaProfileService;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public RegisterWithInvitationHandler(
         IInvitationRepository invitationRepository,
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwtTokenGenerator,
-        IOpenDotaProfileService openDotaProfileService)
+        IOpenDotaProfileService openDotaProfileService,
+        IRootOwnerService? rootOwnerService = null)
     {
         _invitationRepository = invitationRepository;
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
         _openDotaProfileService = openDotaProfileService;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<AuthResponseDto>> Handle(RegisterWithInvitationCommand request, CancellationToken cancellationToken)
@@ -70,7 +73,7 @@ public class RegisterWithInvitationHandler : IRequestHandler<RegisterWithInvitat
         bool emailExists = await _userRepository.ExistsByEmailAsync(invitation.Email, cancellationToken);
         if (emailExists)
         {
-            return Result.Failure<AuthResponseDto>($"Já existe um usuário cadastrado com o email '{invitation.Email}'.");
+            return Result.Failure<AuthResponseDto>("Já existe um usuário cadastrado com este e-mail.");
         }
 
         bool displayNameExists = await _userRepository.ExistsByDisplayNameAsync(request.DisplayName.Trim(), cancellationToken);
@@ -119,6 +122,9 @@ public class RegisterWithInvitationHandler : IRequestHandler<RegisterWithInvitat
 
         var (token, expiresAtUtc) = _jwtTokenGenerator.GenerateToken(user);
 
-        return Result.Success(user.ToAuthResponseDto(token, expiresAtUtc));
+        return Result.Success(user.ToAuthResponseDto(
+            token,
+            expiresAtUtc,
+            isRootOwner: _rootOwnerService?.HasRootOwnerAuthority(user) == true));
     }
 }

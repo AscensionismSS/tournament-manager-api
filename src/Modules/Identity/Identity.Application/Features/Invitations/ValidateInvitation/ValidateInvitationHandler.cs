@@ -1,4 +1,5 @@
 using BuildingBlocks.Domain;
+using Identity.Application.Common.Security;
 using Identity.Contracts.Invitations;
 using Identity.Domain.Repositories;
 using MediatR;
@@ -46,7 +47,7 @@ public class ValidateInvitationHandler : IRequestHandler<ValidateInvitationQuery
 
         return Result.Success(new ValidateInvitationDto(
             IsValid: true,
-            Email: invitation.Email,
+            Email: EmailMasker.Mask(invitation.Email),
             TargetRole: invitation.TargetRole.ToString()
         ));
     }

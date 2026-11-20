@@ -1,5 +1,6 @@
 using BuildingBlocks.Domain;
 using Identity.Application.Common.Interfaces;
+using Identity.Application.Common.Security;
 using Identity.Contracts.Invitations;
 using Identity.Domain.Entities;
 using Identity.Domain.Enums;
@@ -13,15 +14,18 @@ public class CreateInvitationHandler : IRequestHandler<CreateInvitationCommand, 
     private readonly IInvitationRepository _invitationRepository;
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public CreateInvitationHandler(
         IInvitationRepository invitationRepository,
         IUserRepository userRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IRootOwnerService? rootOwnerService = null)
     {
         _invitationRepository = invitationRepository;
         _userRepository = userRepository;
         _currentUserService = currentUserService;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<InvitationDto>> Handle(CreateInvitationCommand request, CancellationToken cancellationToken)
@@ -37,6 +41,16 @@ public class CreateInvitationHandler : IRequestHandler<CreateInvitationCommand, 
             return Result.Failure<InvitationDto>("Apenas o SuperAdmin pode criar convites com privilégios administrativos.");
         }
 
+        // Criação de convites para novos SuperAdmins é exclusiva do proprietário raiz (AdminSeed)
+        if (request.TargetRole == UserRole.SuperAdmin)
+        {
+            var callerUser = await _userRepository.GetByIdAsync(_currentUserService.UserId.Value, cancellationToken);
+            if (_rootOwnerService is null || !_rootOwnerService.HasRootOwnerAuthority(callerUser))
+            {
+                return Result.Failure<InvitationDto>("Apenas o proprietário raiz (AdminSeed) pode criar convites para novos SuperAdmins.");
+            }
+        }
+
         if (!Invitation.AllowedExpirationHours.Contains(request.ValidHours))
         {
             return Result.Failure<InvitationDto>($"A validade do convite deve ser de 24, 48 ou 72 horas. Informado: {request.ValidHours}h.");
@@ -47,7 +61,7 @@ public class CreateInvitationHandler : IRequestHandler<CreateInvitationCommand, 
         bool userExists = await _userRepository.ExistsByEmailAsync(normalizedEmail, cancellationToken);
         if (userExists)
         {
-            return Result.Failure<InvitationDto>($"Já existe um usuário cadastrado com o email '{normalizedEmail}'.");
+            return Result.Failure<InvitationDto>("Já existe um usuário cadastrado com este e-mail.");
         }
 
         var existingPending = await _invitationRepository.GetPendingByEmailAsync(normalizedEmail, cancellationToken);
@@ -56,7 +70,7 @@ public class CreateInvitationHandler : IRequestHandler<CreateInvitationCommand, 
             return Result.Success(new InvitationDto(
                 existingPending.Id,
                 existingPending.Code,
-                existingPending.Email,
+                EmailMasker.Mask(existingPending.Email),
                 existingPending.TargetRole.ToString(),
                 existingPending.CreatedByUserId,
                 existingPending.CreatedAtUtc,
@@ -81,7 +95,7 @@ public class CreateInvitationHandler : IRequestHandler<CreateInvitationCommand, 
         return Result.Success(new InvitationDto(
             invitation.Id,
             invitation.Code,
-            invitation.Email,
+            EmailMasker.Mask(invitation.Email),
             invitation.TargetRole.ToString(),
             invitation.CreatedByUserId,
             invitation.CreatedAtUtc,

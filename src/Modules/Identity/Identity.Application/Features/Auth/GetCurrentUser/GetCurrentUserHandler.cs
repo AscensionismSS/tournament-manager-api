@@ -12,13 +12,16 @@ public class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery, Result
 {
     private readonly IUserRepository _userRepository;
     private readonly ICurrentUserService _currentUserService;
+    private readonly IRootOwnerService? _rootOwnerService;
 
     public GetCurrentUserHandler(
         IUserRepository userRepository,
-        ICurrentUserService currentUserService)
+        ICurrentUserService currentUserService,
+        IRootOwnerService? rootOwnerService = null)
     {
         _userRepository = userRepository;
         _currentUserService = currentUserService;
+        _rootOwnerService = rootOwnerService;
     }
 
     public async Task<Result<UserDto>> Handle(GetCurrentUserQuery request, CancellationToken cancellationToken)
@@ -34,6 +37,6 @@ public class GetCurrentUserHandler : IRequestHandler<GetCurrentUserQuery, Result
             return Result.Failure<UserDto>("Usuário não encontrado.");
         }
 
-        return Result.Success(user.ToDto());
+        return Result.Success(user.ToDto(isRootOwner: _rootOwnerService?.HasRootOwnerAuthority(user) == true));
     }
 }
